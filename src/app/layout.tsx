@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { GlobalProviders } from "@/providers/global-providers";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
+import { Footer } from "@/components/shared/footer";
 import "./globals.css";
 
 /**
@@ -17,7 +18,17 @@ const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
   display: "swap",
+  adjustFontFallback: false,
 });
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F8FAFC" },
+    { media: "(prefers-color-scheme: dark)", color: "#0F172A" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: {
@@ -25,9 +36,32 @@ export const metadata: Metadata = {
     template: "%s | BusinessFlow AI",
   },
   description:
-    "Multi-tenant business operations platform powered by intelligent automation.",
-  keywords: ["business", "automation", "AI", "operations", "SaaS"],
-  authors: [{ name: "BusinessFlow AI" }],
+    "Modern AI-Powered Business Management Platform built with Next.js, TypeScript, Supabase and modern SaaS architecture.",
+  applicationName: "BusinessFlow AI",
+  authors: [{ name: "Aadit Dey", url: "https://github.com/Aadit223dey" }],
+  creator: "Aadit Dey",
+  publisher: "Aadit Dey",
+  keywords: ["business", "automation", "AI", "operations", "SaaS", "multi-tenant", "scheduler"],
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/apple-icon.png",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://github.com/Aadit223dey/BusinessFlow-AI",
+    title: "BusinessFlow AI",
+    description:
+      "Modern AI-Powered Business Management Platform built with Next.js, TypeScript, Supabase and modern SaaS architecture.",
+    siteName: "BusinessFlow AI",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BusinessFlow AI",
+    description:
+      "Modern AI-Powered Business Management Platform built with Next.js, TypeScript, Supabase and modern SaaS architecture.",
+  },
 };
 
 function ErrorFallback() {
@@ -70,7 +104,14 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans antialiased">
         <ErrorBoundary fallback={<ErrorFallback />}>
-          <GlobalProviders>{children}</GlobalProviders>
+          <GlobalProviders>
+            <div className="flex flex-col min-h-screen">
+              <div className="flex-1 flex flex-col">
+                {children}
+              </div>
+              <Footer />
+            </div>
+          </GlobalProviders>
         </ErrorBoundary>
       </body>
     </html>
