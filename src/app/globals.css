@@ -1,0 +1,232 @@
+@import "tailwindcss";
+
+/* ============================================================
+   DESIGN SYSTEM TOKENS — BusinessFlow AI
+   Tailwind CSS v4 @theme inline configuration
+   ============================================================ */
+
+:root {
+  /* --- Surface Palette (Light Premium Tint) --- */
+  --background: #F8FAFC;
+  --foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --card: rgba(255, 255, 255, 0.85);
+  --card-foreground: #0f172a;
+  --border: #E2E8F0;
+  --ring: #4F46E5;
+  --glow: #4F46E5;
+
+  /* --- Primary Engine: Deep Space Indigo --- */
+  --primary: #4F46E5;
+  --primary-dark: #3730A3;
+  --primary-foreground: #ffffff;
+
+  /* --- Success Accent: Emerald Green --- */
+  --success: #10B981;
+  --success-dark: #065F46;
+  --success-foreground: #ffffff;
+
+  /* --- Warning Accent: Amber Gold --- */
+  --warning: #F59E0B;
+  --warning-dark: #92400E;
+  --warning-foreground: #ffffff;
+
+  /* --- Destructive Accent: Crimson Red --- */
+  --destructive: #EF4444;
+  --destructive-dark: #991B1B;
+  --destructive-foreground: #ffffff;
+
+  /* --- Overlay --- */
+  --overlay: rgba(0, 0, 0, 0.5);
+}
+
+.dark {
+  /* --- Surface Palette (Dark Premium Depth) --- */
+  --background: #0F172A;
+  --foreground: #f1f5f9;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --card: rgba(30, 41, 59, 0.7);
+  --card-foreground: #f1f5f9;
+  --border: #1E293B;
+  --ring: #6366f1;
+  --glow: #F8FAFC;
+
+  /* --- Primary Engine (Dark Mode) --- */
+  --primary: #6366f1;
+  --primary-dark: #4F46E5;
+  --primary-foreground: #ffffff;
+
+  /* --- Success (Dark Mode) --- */
+  --success: #34d399;
+  --success-dark: #10B981;
+  --success-foreground: #ffffff;
+
+  /* --- Warning (Dark Mode) --- */
+  --warning: #fbbf24;
+  --warning-dark: #F59E0B;
+  --warning-foreground: #0f172a;
+
+  /* --- Destructive (Dark Mode) --- */
+  --destructive: #f87171;
+  --destructive-dark: #EF4444;
+  --destructive-foreground: #ffffff;
+
+  /* --- Overlay --- */
+  --overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* ============================================================
+   TAILWIND v4 THEME REGISTRATION
+   ============================================================ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-glow: var(--glow);
+
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-success: var(--success);
+  --color-success-dark: var(--success-dark);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-warning: var(--warning);
+  --color-warning-dark: var(--warning-dark);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-dark: var(--destructive-dark);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-brand-primary: #4F46E5;
+  --color-brand-primary-dark: #3730A3;
+  --color-brand-electric: #2563EB;
+  --color-brand-electric-dark: #1D4ED8;
+  --color-brand-graphite: #0F172A;
+  --color-brand-graphite-dark: #1E293B;
+
+  --shadow-premium: 0 4px 30px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+
+  --color-overlay: var(--overlay);
+
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-fade-out: fade-out 0.15s ease-in;
+  --animate-slide-in-right: slide-in-right 0.25s ease-out;
+  --animate-slide-out-right: slide-out-right 0.2s ease-in;
+  --animate-scale-in: scale-in 0.2s ease-out;
+  --animate-pulse-soft: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ============================================================
+   KEYFRAME ANIMATIONS
+   ============================================================ */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-out-right {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ============================================================
+   BASE LAYER & HARDWARE ACCELERATION
+   ============================================================ */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    will-change: background-color, border-color, color, box-shadow;
+  }
+
+  /* Smooth transitions for theme-aware elements */
+  [data-theme-transition] {
+    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+/* ============================================================
+   HARDWARE-ACCELERATED 3D PARALLAX VIEWPORT RULES
+   ============================================================ */
+
+.perspective-viewport {
+  perspective: 1200px;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.parallax-container {
+  transform-style: preserve-3d;
+}
+
+.parallax-depth-deep {
+  transform: translateZ(-100px) scale(1.1);
+}
+
+.parallax-depth-medium {
+  transform: translateZ(-50px) scale(1.05);
+}
+
+.parallax-depth-flat {
+  transform: translateZ(0);
+}
+
+.parallax-depth-forward {
+  transform: translateZ(50px) scale(0.95);
+}
+
+.will-change-transform {
+  will-change: transform;
+}
