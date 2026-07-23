@@ -1,20 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/config/env";
+import { SUPER_ADMIN_EMAIL } from "@/config/admin";
 
 /**
- * Application Entry Session Screening Layer
+ * 4-Role Identity & Flow Restructuring Middleware
  *
- * Inspects active request cookies, checks session token expiration properties,
- * and routes traffic dynamically based on authentication status, roles, and
- * onboarding completion state.
- *
- * Sprint 3 additions:
- * - Authenticated users without completed onboarding are redirected to /onboarding
- * - Authenticated users WITH completed onboarding are blocked from /onboarding
- * - Auth page redirects now route to /onboarding for unconfigured users
- *
- * Completed under 100ms window limit to prevent routing delays.
+ * Evaluates session JWT tokens, user email, profile roles (SUPER_ADMIN, BUSINESS_OWNER, STAFF, CUSTOMER),
+ * role selection flags (has_selected_role), and onboarding status (has_completed_onboarding)
+ * to enforce strict server-side portal boundary protection.
  */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -51,56 +45,112 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const isDashboardRoute = pathname.startsWith("/dashboard");
-  const isOnboardingRoute = pathname.startsWith("/onboarding");
+
+  // Skip middleware checks for API routes
+  if (pathname.startsWith("/api/")) {
+    return response;
+  }
+
+  const isProtectedPath =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/customers") ||
+    pathname.startsWith("/employees") ||
+    pathname.startsWith("/services") ||
+    pathname.startsWith("/appointments") ||
+    pathname.startsWith("/calendar") ||
+    pathname.startsWith("/invoices") ||
+    pathname.startsWith("/inventory") ||
+    pathname.startsWith("/reports") ||
+    pathname.startsWith("/ai-insights") ||
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/select-role") ||
+    pathname.startsWith("/customer-portal") ||
+    pathname.startsWith("/staff-portal") ||
+    pathname.startsWith("/admin-portal");
+
   const isAuthRoute =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password");
-  const isApiRoute = pathname.startsWith("/api/");
 
-  // Skip middleware checks for API routes
-  if (isApiRoute) {
-    return response;
-  }
-
-  // ─── Unauthenticated Users ────────────────────────────────────
+  // ─── 1. Unauthenticated Traffic ──────────────────────────────────────────
   if (!user) {
-    // Block access to protected routes
-    if (isDashboardRoute || isOnboardingRoute) {
-      const redirectUrl = new URL("/login", request.url);
-      return NextResponse.redirect(redirectUrl);
+    if (isProtectedPath) {
+      return NextResponse.redirect(new URL("/login", request.url));
     }
     return response;
   }
 
-  // ─── Authenticated Users ──────────────────────────────────────
-  // Check onboarding completion status
+  // ─── 2. Super Admin Check (Email or Role) ───────────────────────────────
+  const isSuperAdminEmail =
+    user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+
+  // Retrieve user profile data
   const { data: profile } = await supabase
     .from("profiles")
-    .select("has_completed_onboarding")
+    .select("role, has_selected_role, has_completed_onboarding")
     .eq("id", user.id)
     .single();
 
-  const hasCompletedOnboarding = profile?.has_completed_onboarding === true;
+  const role = isSuperAdminEmail ? "SUPER_ADMIN" : profile?.role;
+  const hasSelectedRole = isSuperAdminEmail ? true : profile?.has_selected_role === true;
+  const hasCompletedOnboarding = isSuperAdminEmail ? true : profile?.has_completed_onboarding === true;
 
-  // Redirect authenticated users away from auth pages
-  if (isAuthRoute) {
-    if (hasCompletedOnboarding) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+  // ─── Path A: Super Admin ─────────────────────────────────────────────────
+  if (role === "SUPER_ADMIN") {
+    if (!pathname.startsWith("/admin-portal")) {
+      return NextResponse.redirect(new URL("/admin-portal", request.url));
     }
-    return NextResponse.redirect(new URL("/onboarding", request.url));
+    return response;
   }
 
-  // Users who haven't completed onboarding cannot access dashboard
-  if (isDashboardRoute && !hasCompletedOnboarding) {
-    return NextResponse.redirect(new URL("/onboarding", request.url));
+  // ─── Path B: Unselected Role ─────────────────────────────────────────────
+  if (!hasSelectedRole) {
+    if (!pathname.startsWith("/select-role")) {
+      return NextResponse.redirect(new URL("/select-role", request.url));
+    }
+    return response;
   }
 
-  // Users who have completed onboarding cannot access onboarding again
-  if (isOnboardingRoute && hasCompletedOnboarding) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // ─── Path C: Business Owner ──────────────────────────────────────────────
+  if (role === "BUSINESS_OWNER") {
+    if (!hasCompletedOnboarding) {
+      if (!pathname.startsWith("/onboarding")) {
+        return NextResponse.redirect(new URL("/onboarding", request.url));
+      }
+      return response;
+    } else {
+      // Completed Onboarding -> must stay in /dashboard or sub-routes
+      if (
+        isAuthRoute ||
+        pathname.startsWith("/select-role") ||
+        pathname.startsWith("/onboarding") ||
+        pathname.startsWith("/customer-portal") ||
+        pathname.startsWith("/staff-portal") ||
+        pathname.startsWith("/admin-portal")
+      ) {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+      return response;
+    }
+  }
+
+  // ─── Path D: Customer ───────────────────────────────────────────────────
+  if (role === "CUSTOMER") {
+    if (!pathname.startsWith("/customer-portal")) {
+      return NextResponse.redirect(new URL("/customer-portal", request.url));
+    }
+    return response;
+  }
+
+  // ─── Path E: Staff / Employee ────────────────────────────────────────────
+  if (role === "STAFF") {
+    if (!pathname.startsWith("/staff-portal")) {
+      return NextResponse.redirect(new URL("/staff-portal", request.url));
+    }
+    return response;
   }
 
   return response;
@@ -109,11 +159,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - images, icons or other assets
+     * Match all request paths except for static files & assets
      */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],

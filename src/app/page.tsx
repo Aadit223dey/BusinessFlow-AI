@@ -2,23 +2,17 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/config/env";
+import { SUPER_ADMIN_EMAIL } from "@/config/admin";
 import { handleAsyncOperation } from "@/services/base-api";
-
-// Import client-side supabase for reference and dependency mapping
-import { supabase as _clientSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Authoritative Root Route (/) System Entry-Point Director
  *
- * Evaluates active user sessions, checks onboarding status flags
- * via fast server-side lookups using handleAsyncOperation, and
- * redirects traffic instantly.
- *
- * - Unauthenticated requests redirect cleanly to /login.
- * - Authenticated users with uncompleted setups redirect instantly to /onboarding.
- * - Authenticated users with verified setup profiles land directly on /dashboard.
+ * Evaluates active user sessions, checks email against SUPER_ADMIN_EMAIL,
+ * evaluates role selection (has_selected_role) and onboarding status
+ * (has_completed_onboarding) to route traffic instantly across all 4 portals.
  */
 export default async function RootPage() {
   const cookieStore = await cookies();
@@ -44,7 +38,7 @@ export default async function RootPage() {
     }
   );
 
-  // Retrieve user session wrapped in handleAsyncOperation
+  // Retrieve user session
   const { data: sessionData } = await handleAsyncOperation(async () => {
     const { data, error } = await supabaseServer.auth.getUser();
     if (error) throw error;
@@ -57,22 +51,48 @@ export default async function RootPage() {
     redirect("/login");
   }
 
-  // Retrieve onboarding status wrapped in handleAsyncOperation
+  // Super Admin Check
+  const isSuperAdminEmail =
+    user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+
+  if (isSuperAdminEmail) {
+    redirect("/admin-portal");
+  }
+
+  // Retrieve profile data
   const { data: profile } = await handleAsyncOperation(async () => {
     const { data, error } = await supabaseServer
       .from("profiles")
-      .select("has_completed_onboarding")
+      .select("role, has_selected_role, has_completed_onboarding")
       .eq("id", user.id)
       .single();
     if (error) throw error;
     return data;
   });
 
-  const hasCompletedOnboarding = profile?.has_completed_onboarding === true;
-
-  if (hasCompletedOnboarding) {
-    redirect("/dashboard");
-  } else {
-    redirect("/onboarding");
+  if (profile?.role === "SUPER_ADMIN") {
+    redirect("/admin-portal");
   }
+
+  if (!profile?.has_selected_role) {
+    redirect("/select-role");
+  }
+
+  if (profile.role === "BUSINESS_OWNER") {
+    if (profile.has_completed_onboarding) {
+      redirect("/dashboard");
+    } else {
+      redirect("/onboarding");
+    }
+  }
+
+  if (profile.role === "CUSTOMER") {
+    redirect("/customer-portal");
+  }
+
+  if (profile.role === "STAFF") {
+    redirect("/staff-portal");
+  }
+
+  redirect("/select-role");
 }

@@ -3,31 +3,24 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { type User, type Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-
-export interface Profile {
-  id: string;
-  tenant_id: string | null;
-  role: "ADMIN" | "MANAGER" | "STAFF";
-  first_name: string | null;
-  last_name: string | null;
-  has_completed_onboarding: boolean;
-  updated_at: string;
-}
+import { type UserRole, type UserProfile } from "@/types";
 
 export interface AuthContextType {
   user: User | null;
-  profile: Profile | null;
+  profile: UserProfile | null;
   session: Session | null;
   isLoading: boolean;
-  role: "ADMIN" | "MANAGER" | "STAFF" | null;
+  role: UserRole | null;
+  hasSelectedRole: boolean;
   hasCompletedOnboarding: boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -43,11 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Error fetching user profile:", error.message);
         setProfile(null);
       } else {
-        setProfile(data as Profile);
+        setProfile(data as UserProfile);
       }
     } catch (err) {
       console.error("Unexpected error fetching profile:", err);
       setProfile(null);
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfile(user.id);
     }
   };
 
@@ -95,7 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     isLoading,
     role: profile?.role ?? null,
+    hasSelectedRole: profile?.has_selected_role ?? false,
     hasCompletedOnboarding: profile?.has_completed_onboarding ?? false,
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
