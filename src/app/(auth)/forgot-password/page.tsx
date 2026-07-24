@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
 
 const forgotPasswordSchema = z.object({
   email: z
@@ -39,6 +40,7 @@ export default function ForgotPasswordPage() {
   const onSubmit = async (values: ForgotPasswordSchema) => {
     setIsSubmitting(true);
     setErrorMsg(null);
+    logAuthTrace("Forgot Password Requested", { email: values.email });
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(values.email, {
@@ -46,21 +48,24 @@ export default function ForgotPasswordPage() {
       });
 
       if (error) {
-        setErrorMsg(error.message);
+        logAuthError("Forgot Password Failed", error);
+        const cleanMsg = getErrorMessage(error);
+        setErrorMsg(cleanMsg);
         toast.error("Request failed", {
-          description: error.message,
+          description: cleanMsg,
         });
       } else {
+        logAuthTrace("Forgot Password Email Sent", { email: values.email });
         setIsSent(true);
         toast.success("Recovery link sent!", {
           description: "Check your email inbox for the reset link.",
         });
       }
     } catch (err) {
-      console.error("Forgot password unexpected error:", err);
-      const msg = "An unexpected error occurred. Please try again.";
-      setErrorMsg(msg);
-      toast.error(msg);
+      logAuthError("Forgot Password Exception", err);
+      const cleanMsg = getErrorMessage(err);
+      setErrorMsg(cleanMsg);
+      toast.error(cleanMsg);
     } finally {
       setIsSubmitting(false);
     }

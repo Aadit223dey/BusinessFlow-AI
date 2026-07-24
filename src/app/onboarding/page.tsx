@@ -21,6 +21,8 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
  * file uploads to Supabase Storage.
  */
 
+import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+
 function OnboardingWizard() {
   const router = useRouter();
   const { formData, currentStep, updateStepData, setCurrentStep, clearDraft } =
@@ -91,6 +93,7 @@ function OnboardingWizard() {
   const handleFinalSubmit = useCallback(async () => {
     setIsSubmitting(true);
     setSubmitError(null);
+    logAuthTrace("Onboarding wizard final submission started", { businessName: formData.businessIdentity.businessName });
 
     try {
       // Upload logo if provided
@@ -106,8 +109,7 @@ function OnboardingWizard() {
           });
 
         if (uploadError) {
-          console.error("Logo upload failed:", uploadError.message);
-          // Non-blocking — continue without logo
+          logAuthError("Logo upload warning", uploadError);
         } else {
           const { data: publicUrlData } = supabase.storage
             .from("business_assets")
@@ -144,16 +146,18 @@ function OnboardingWizard() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Submission failed");
+        const cleanMsg = getErrorMessage(result.error);
+        logAuthError("Onboarding submission failed", result);
+        throw new Error(cleanMsg);
       }
 
-      // Clear draft state and redirect
+      logAuthTrace("Onboarding submission success", result);
       clearDraft();
       router.push(result.redirectTo || "/dashboard");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred";
-      setSubmitError(message);
+      logAuthError("Onboarding final submit exception", err);
+      const cleanMessage = getErrorMessage(err);
+      setSubmitError(cleanMessage);
       setIsSubmitting(false);
     }
   }, [formData, logoFile, clearDraft, router]);

@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 
+import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+
 const loginSchema = z.object({
   email: z
     .string()
@@ -45,6 +47,7 @@ export default function LoginPage() {
   const onSubmit = async (values: LoginSchema) => {
     setIsSubmitting(true);
     setAuthError(null);
+    logAuthTrace("User Login Initiated", { email: values.email });
 
     try {
       const { data: signInData, error } = await supabase.auth.signInWithPassword({
@@ -53,15 +56,15 @@ export default function LoginPage() {
       });
 
       if (error) {
-        setAuthError(error.message);
-        toast.error("Authentication failed", {
-          description: error.message,
-        });
+        logAuthError("Login Failed", error);
+        const cleanMsg = getErrorMessage(error);
+        setAuthError(cleanMsg);
+        toast.error("Authentication failed", { description: cleanMsg });
         setIsSubmitting(false);
         return;
       }
 
-      // 1. Wait until the session is fully established and cookies are persisted
+      logAuthTrace("Login Success, settling cookies...", { userId: signInData.user?.id });
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const user = signInData.user;
@@ -69,39 +72,47 @@ export default function LoginPage() {
         throw new Error("No user returned from authentication.");
       }
 
-      // 2. Retrieve the authenticated user's profile
+      // Retrieve user profile to evaluate multi-role portal routing
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("has_completed_onboarding")
+        .select("role, has_selected_role, has_completed_onboarding")
         .eq("id", user.id)
         .single();
 
       if (profileError) {
-        console.error("Error fetching user profile on login:", profileError);
-        // Fallback: If profile isn't found, default to onboarding
-        router.replace("/onboarding");
+        logAuthError("Profile Lookup Error after login", profileError);
+        // Fallback to root router
+        router.replace("/");
       } else {
-        // 3. Read the has_completed_onboarding flag
-        const hasCompletedOnboarding = profile?.has_completed_onboarding === true;
+        logAuthTrace("Profile Retrieved on Login", profile);
 
-        // 4. If has_completed_onboarding == false -> router.replace("/onboarding")
-        // 5. If has_completed_onboarding == true -> router.replace("/dashboard")
-        if (hasCompletedOnboarding) {
-          router.replace("/dashboard");
+        if (profile?.role === "SUPER_ADMIN" || user.email?.toLowerCase() === "dey223aadit@gmail.com") {
+          router.replace("/admin-portal");
+        } else if (!profile?.has_selected_role) {
+          router.replace("/select-role");
+        } else if (profile.role === "BUSINESS_OWNER") {
+          if (profile.has_completed_onboarding) {
+            router.replace("/dashboard");
+          } else {
+            router.replace("/onboarding");
+          }
+        } else if (profile.role === "CUSTOMER") {
+          router.replace("/customer-portal");
+        } else if (profile.role === "STAFF") {
+          router.replace("/staff-portal");
         } else {
-          router.replace("/onboarding");
+          router.replace("/select-role");
         }
       }
 
       router.refresh();
     } catch (err) {
-      console.error("Login unexpected error:", err);
-      const msg = "An unexpected error occurred. Please try again.";
-      setAuthError(msg);
-      toast.error(msg);
+      logAuthError("Login Unexpected Error", err);
+      const cleanMsg = getErrorMessage(err);
+      setAuthError(cleanMsg);
+      toast.error("Login Error", { description: cleanMsg });
       setIsSubmitting(false);
     } finally {
-      // Ensure submitting state is reset if redirect takes time or unmounting is delayed
       setIsSubmitting(false);
     }
   };

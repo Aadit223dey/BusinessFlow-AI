@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { type User, type Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { type UserRole, type UserProfile } from "@/types";
+import { logAuthTrace, logAuthError } from "@/lib/error-utils";
 
 export interface AuthContextType {
   user: User | null;
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
+      logAuthTrace("Fetching profile for user", { userId });
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -33,13 +35,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error) {
-        console.error("Error fetching user profile:", error.message);
+        logAuthError("Error fetching user profile", error);
         setProfile(null);
       } else {
+        logAuthTrace("Profile fetched successfully", data);
         setProfile(data as UserProfile);
       }
     } catch (err) {
-      console.error("Unexpected error fetching profile:", err);
+      logAuthError("Unexpected error fetching profile", err);
       setProfile(null);
     }
   };
@@ -53,14 +56,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        logAuthTrace("Initializing Auth Session...");
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          logAuthError("Initial getSession error", sessionError);
+        }
+
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
         if (initialSession?.user) {
+          logAuthTrace("Initial session established", { userId: initialSession.user.id, email: initialSession.user.email });
           await fetchProfile(initialSession.user.id);
         }
       } catch (err) {
-        console.error("Failed to initialize auth session:", err);
+        logAuthError("Failed to initialize auth session", err);
       } finally {
         setIsLoading(false);
       }
@@ -69,7 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, currentSession) => {
+      async (event, currentSession) => {
+        logAuthTrace("Auth state changed event", { event, userId: currentSession?.user?.id });
         setIsLoading(true);
         setSession(currentSession);
         setUser(currentSession?.user ?? null);

@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 
+import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+
 const registerSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -62,9 +64,10 @@ export default function RegisterPage() {
   const onSubmit = async (values: RegisterSchema) => {
     setIsSubmitting(true);
     setErrorMsg(null);
+    logAuthTrace("User Signup Initiated", { email: values.email });
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
@@ -72,27 +75,29 @@ export default function RegisterPage() {
           data: {
             first_name: values.firstName,
             last_name: values.lastName,
-            role: "ADMIN",
           },
         },
       });
 
       if (error) {
-        setErrorMsg(error.message);
+        logAuthError("User Signup Failed", error);
+        const cleanMessage = getErrorMessage(error);
+        setErrorMsg(cleanMessage);
         toast.error("Registration failed", {
-          description: error.message,
+          description: cleanMessage,
         });
       } else {
+        logAuthTrace("User Signup Success", { userId: data.user?.id, email: data.user?.email });
         setIsRegistered(true);
         toast.success("Registration successful!", {
           description: "Check your email for the verification link.",
         });
       }
     } catch (err) {
-      console.error("SignUp unexpected error:", err);
-      const msg = "An unexpected error occurred. Please try again.";
-      setErrorMsg(msg);
-      toast.error(msg);
+      logAuthError("SignUp Unexpected Exception", err);
+      const cleanMessage = getErrorMessage(err);
+      setErrorMsg(cleanMessage);
+      toast.error("Registration Error", { description: cleanMessage });
     } finally {
       setIsSubmitting(false);
     }

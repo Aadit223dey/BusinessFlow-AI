@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { env } from "@/config/env";
+import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
 
 /**
  * Secure Transactional Workspace Provisioning Router
@@ -10,11 +11,8 @@ import { env } from "@/config/env";
  * POST /api/onboarding/submit
  *
  * Validates configuration fields, creates tenant + business_settings
- * records in a discrete transaction, uploads logo to storage,
- * updates the user profile with onboarding completion flag and
- * tenant association, then returns success.
- *
- * Rejects requests from profiles that have already completed onboarding.
+ * records in a discrete sequence, updates the user profile with onboarding
+ * completion flag and tenant association, and returns success.
  */
 
 const submitPayloadSchema = z.object({
@@ -79,13 +77,16 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      logAuthError("Onboarding submit Unauthorized", authError);
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
       );
     }
 
-    // 2. Check if already onboarded
+    logAuthTrace("Onboarding submission started", { userId: user.id, email: user.email });
+
+    // 2. Check existing profile status
     const { data: existingProfile, error: profileError } = await supabase
       .from("profiles")
       .select("has_completed_onboarding, tenant_id")
@@ -93,13 +94,16 @@ export async function POST(request: Request) {
       .single();
 
     if (profileError) {
+      logAuthError("Onboarding profile check query failed", profileError);
+      const cleanMsg = getErrorMessage(profileError);
       return NextResponse.json(
-        { error: "Failed to fetch user profile" },
+        { error: `Profile lookup failed: ${cleanMsg}` },
         { status: 500 }
       );
     }
 
-    if (existingProfile.has_completed_onboarding) {
+    if (existingProfile?.has_completed_onboarding) {
+      logAuthTrace("Onboarding already completed", { userId: user.id });
       return NextResponse.json(
         { error: "Onboarding has already been completed" },
         { status: 409 }
@@ -111,6 +115,7 @@ export async function POST(request: Request) {
     const parseResult = submitPayloadSchema.safeParse(body);
 
     if (!parseResult.success) {
+      logAuthError("Onboarding payload validation failed", parseResult.error.flatten());
       return NextResponse.json(
         {
           error: "Validation failed",
@@ -124,6 +129,7 @@ export async function POST(request: Request) {
 
     // 4. Create tenant record
     const slug = generateSlug(payload.businessName) + "-" + Date.now().toString(36);
+    logAuthTrace("Creating tenant record", { name: payload.businessName, slug });
 
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
@@ -147,14 +153,18 @@ export async function POST(request: Request) {
       .single();
 
     if (tenantError || !tenant) {
-      console.error("Tenant creation failed:", tenantError);
+      logAuthError("Tenant creation query failed", tenantError);
+      const cleanMsg = getErrorMessage(tenantError);
       return NextResponse.json(
-        { error: "Failed to create workspace" },
+        { error: `Failed to create workspace tenant: ${cleanMsg}` },
         { status: 500 }
       );
     }
 
+    logAuthTrace("Tenant creation success", { tenantId: tenant.id });
+
     // 5. Create business_settings
+    logAuthTrace("Creating business_settings record", { tenantId: tenant.id });
     const { error: settingsError } = await supabase
       .from("business_settings")
       .insert({
@@ -166,35 +176,42 @@ export async function POST(request: Request) {
       });
 
     if (settingsError) {
-      console.error("Business settings creation failed:", settingsError);
+      logAuthError("Business settings creation failed", settingsError);
+      const cleanMsg = getErrorMessage(settingsError);
       // Rollback tenant
       await supabase.from("tenants").delete().eq("id", tenant.id);
       return NextResponse.json(
-        { error: "Failed to save business settings" },
+        { error: `Failed to save business settings: ${cleanMsg}` },
         { status: 500 }
       );
     }
 
-    // 6. Update user profile
+    logAuthTrace("Business settings creation success", { tenantId: tenant.id });
+
+    // 6. Update user profile with BUSINESS_OWNER role and onboarding completion
+    logAuthTrace("Updating user profile onboarding completion", { userId: user.id, tenantId: tenant.id });
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
         tenant_id: tenant.id,
-        role: "ADMIN",
+        role: "BUSINESS_OWNER",
         has_completed_onboarding: true,
       })
       .eq("id", user.id);
 
     if (updateError) {
-      console.error("Profile update failed:", updateError);
-      // Attempt rollback
+      logAuthError("Profile onboarding update failed", updateError);
+      const cleanMsg = getErrorMessage(updateError);
+      // Rollback tenant & business settings
       await supabase.from("business_settings").delete().eq("tenant_id", tenant.id);
       await supabase.from("tenants").delete().eq("id", tenant.id);
       return NextResponse.json(
-        { error: "Failed to update user profile" },
+        { error: `Failed to finalize user profile: ${cleanMsg}` },
         { status: 500 }
       );
     }
+
+    logAuthTrace("Profile onboarding update success", { userId: user.id });
 
     return NextResponse.json({
       success: true,
@@ -202,8 +219,8 @@ export async function POST(request: Request) {
       redirectTo: "/dashboard",
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal server error";
-    console.error("Onboarding submission error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    logAuthError("Onboarding submission unexpected exception", err);
+    const cleanMsg = getErrorMessage(err);
+    return NextResponse.json({ error: cleanMsg }, { status: 500 });
   }
 }

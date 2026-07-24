@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
 
 const resetPasswordSchema = z
   .object({
@@ -61,6 +62,7 @@ export default function ResetPasswordPage() {
   const onSubmit = async (values: ResetPasswordSchema) => {
     setIsSubmitting(true);
     setErrorMsg(null);
+    logAuthTrace("Reset Password Submission Started");
 
     try {
       const { error } = await supabase.auth.updateUser({
@@ -68,21 +70,24 @@ export default function ResetPasswordPage() {
       });
 
       if (error) {
-        setErrorMsg(error.message);
+        logAuthError("Reset Password Failed", error);
+        const cleanMsg = getErrorMessage(error);
+        setErrorMsg(cleanMsg);
         toast.error("Password reset failed", {
-          description: error.message,
+          description: cleanMsg,
         });
       } else {
+        logAuthTrace("Reset Password Success");
         setIsResetDone(true);
         toast.success("Password reset successfully!", {
           description: "You can now sign in with your new password.",
         });
       }
     } catch (err) {
-      console.error("Reset password unexpected error:", err);
-      const msg = "An unexpected error occurred. Please try again.";
-      setErrorMsg(msg);
-      toast.error(msg);
+      logAuthError("Reset Password Exception", err);
+      const cleanMsg = getErrorMessage(err);
+      setErrorMsg(cleanMsg);
+      toast.error(cleanMsg);
     } finally {
       setIsSubmitting(false);
     }

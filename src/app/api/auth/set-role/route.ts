@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { env } from "@/config/env";
+import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
 
 export async function POST(request: Request) {
   try {
@@ -34,8 +35,14 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      logAuthError("set-role API Unauthorized", authError);
+      return NextResponse.json(
+        { error: "Unauthorized access: Please log in." },
+        { status: 401 }
+      );
     }
+
+    logAuthTrace("set-role API Initiated", { userId: user.id, email: user.email });
 
     // 2. Parse request body
     const body = await request.json();
@@ -43,6 +50,7 @@ export async function POST(request: Request) {
 
     // 3. Exploit Guard: Block SUPER_ADMIN or STAFF self-assignment
     if (role === "SUPER_ADMIN" || role === "STAFF") {
+      logAuthError("set-role API Exploit Guard Blocked", { role, userId: user.id });
       return NextResponse.json(
         {
           error:
@@ -73,27 +81,35 @@ export async function POST(request: Request) {
             has_completed_onboarding: true,
           };
 
-    const { error: updateError } = await supabase
+    logAuthTrace("set-role API Executing Profile Update", { userId: user.id, updates });
+
+    const { data: updatedProfile, error: updateError } = await supabase
       .from("profiles")
       .update(updates)
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .select("*")
+      .single();
 
     if (updateError) {
-      console.error("Error updating user role:", updateError);
+      logAuthError("set-role API Profile Update Query Failed", updateError);
+      const cleanMsg = getErrorMessage(updateError);
       return NextResponse.json(
-        { error: "Failed to update profile role." },
+        { error: `Database error updating role: ${cleanMsg}` },
         { status: 500 }
       );
     }
+
+    logAuthTrace("set-role API Profile Update Success", updatedProfile);
 
     const redirectPath =
       role === "BUSINESS_OWNER" ? "/onboarding" : "/customer-portal";
 
     return NextResponse.json({ success: true, redirectPath }, { status: 200 });
   } catch (error) {
-    console.error("Set role API error:", error);
+    logAuthError("set-role API Unexpected Exception", error);
+    const cleanMsg = getErrorMessage(error);
     return NextResponse.json(
-      { error: "Internal server error." },
+      { error: `Server error setting role: ${cleanMsg}` },
       { status: 500 }
     );
   }

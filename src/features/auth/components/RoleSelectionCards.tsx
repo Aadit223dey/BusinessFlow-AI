@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { motion } from "framer-motion";
 
+import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+
 export function RoleSelectionCards() {
   const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<"BUSINESS_OWNER" | "CUSTOMER">("BUSINESS_OWNER");
@@ -14,6 +16,7 @@ export function RoleSelectionCards() {
 
   const handleRoleSubmit = async () => {
     setIsSubmitting(true);
+    logAuthTrace("Submitting selected role choice", { selectedRole });
     try {
       const response = await fetch("/api/auth/set-role", {
         method: "POST",
@@ -24,13 +27,16 @@ export function RoleSelectionCards() {
       const data = await response.json();
 
       if (!response.ok) {
+        logAuthError("Role Selection API Error", data.error);
+        const cleanMsg = getErrorMessage(data.error);
         toast.error("Role Selection Failed", {
-          description: data.error || "Could not set role.",
+          description: cleanMsg,
         });
         setIsSubmitting(false);
         return;
       }
 
+      logAuthTrace("Role Selection Saved Successfully", data);
       toast.success("Role Saved!", {
         description:
           selectedRole === "BUSINESS_OWNER"
@@ -41,8 +47,9 @@ export function RoleSelectionCards() {
       router.replace(data.redirectPath);
       router.refresh();
     } catch (err) {
-      console.error("Error setting role:", err);
-      toast.error("An unexpected error occurred.");
+      logAuthError("Role Selection Unexpected Exception", err);
+      const cleanMsg = getErrorMessage(err);
+      toast.error("Role Error", { description: cleanMsg });
       setIsSubmitting(false);
     }
   };
