@@ -1,6 +1,6 @@
 -- Migration: 20260724000000_multi_role_architecture.sql
 -- Description: Multi-role identity architecture (SUPER_ADMIN, BUSINESS_OWNER, STAFF, CUSTOMER)
--- with automated Super Admin email elevation, role selection flags, and RLS policies.
+-- with automated Super Admin email elevation, role selection flags, and non-recursive RLS policies.
 
 -- 1. Create public.user_role ENUM
 DO $$
@@ -18,7 +18,35 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS has_selected_role BOOLEAN D
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS has_completed_onboarding BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
--- 3. Automated Super Admin & User Trigger (handle_new_user)
+-- 3. Helper SECURITY DEFINER functions (bypasses RLS to prevent policy infinite recursion)
+CREATE OR REPLACE FUNCTION public.get_user_role(user_id uuid)
+RETURNS public.user_role
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT role FROM public.profiles WHERE id = user_id LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_user_tenant_id(user_id uuid)
+RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT tenant_id FROM public.profiles WHERE id = user_id LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_super_admin(user_id uuid)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(
+    (SELECT role = 'SUPER_ADMIN'::public.user_role FROM public.profiles WHERE id = user_id LIMIT 1),
+    false
+  );
+$$;
+
+-- 4. Automated Super Admin & User Trigger (handle_new_user)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -55,7 +83,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 4. Update RLS Policies on public.profiles
+-- 5. Non-recursive RLS Policies on public.profiles
 DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Business Owners can view tenant profiles" ON public.profiles;
@@ -71,19 +99,16 @@ CREATE POLICY "Users can update own profile"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
--- Business Owners can view profiles tied to their explicit tenant_id
+-- Business Owners can view profiles tied to their explicit tenant_id (using SECURITY DEFINER helper)
 CREATE POLICY "Business Owners can view tenant profiles"
   ON public.profiles FOR SELECT
   USING (
     tenant_id IS NOT NULL 
-    AND tenant_id IN (
-      SELECT tenant_id FROM public.profiles WHERE id = auth.uid() AND role = 'BUSINESS_OWNER'::public.user_role
-    )
+    AND tenant_id = public.get_user_tenant_id(auth.uid())
+    AND public.get_user_role(auth.uid()) = 'BUSINESS_OWNER'::public.user_role
   );
 
--- Super Admins maintain bypass permissions across all rows
+-- Super Admins maintain bypass permissions across all rows (using SECURITY DEFINER helper)
 CREATE POLICY "Super Admins bypass profile access"
   ON public.profiles FOR ALL
-  USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'SUPER_ADMIN'::public.user_role
-  );
+  USING (public.is_super_admin(auth.uid()));
