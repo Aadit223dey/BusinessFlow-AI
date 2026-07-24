@@ -50,7 +50,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
-  admin_email TEXT := 'admin@businessflow.ai';
+  admin_email TEXT := 'dey223aadit@gmail.com';
 BEGIN
   IF LOWER(NEW.email) = LOWER(admin_email) THEN
     INSERT INTO public.profiles (id, role, has_selected_role, has_completed_onboarding, first_name, last_name)

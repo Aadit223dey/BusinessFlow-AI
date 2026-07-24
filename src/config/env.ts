@@ -22,7 +22,7 @@ const envSchema = z.object({
     .min(1, "NEXT_PUBLIC_SUPABASE_ANON_KEY must not be empty"),
 
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-  SUPER_ADMIN_EMAIL: z.string().email().optional().default("admin@businessflow.ai"),
+  SUPER_ADMIN_EMAIL: z.string().email().optional().default("dey223aadit@gmail.com"),
 });
 
 export type Env = z.infer<typeof envSchema>;
