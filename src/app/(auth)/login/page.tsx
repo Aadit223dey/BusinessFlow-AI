@@ -12,7 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 
-import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { parseAuthError } from "@/lib/auth-errors";
+import { logger } from "@/lib/logger";
 
 const loginSchema = z.object({
   email: z
@@ -48,6 +50,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
     setAuthError(null);
     logAuthTrace("User Login Initiated", { email: values.email });
+    logger.info("Login attempt initiated", { operation: "auth.login", userId: values.email });
 
     try {
       const { data: signInData, error } = await supabase.auth.signInWithPassword({
@@ -57,14 +60,16 @@ export default function LoginPage() {
 
       if (error) {
         logAuthError("Login Failed", error);
-        const cleanMsg = getErrorMessage(error);
-        setAuthError(cleanMsg);
-        toast.error("Authentication failed", { description: cleanMsg });
+        const parsed = parseAuthError(error);
+        logger.error("Login failed", { operation: "auth.login", category: parsed.category });
+        setAuthError(parsed.message);
+        toast.error(parsed.title, { description: parsed.message });
         setIsSubmitting(false);
         return;
       }
 
       logAuthTrace("Login Success, settling cookies...", { userId: signInData.user?.id });
+      logger.info("Login successful", { operation: "auth.login", userId: signInData.user?.id });
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const user = signInData.user;
@@ -108,9 +113,10 @@ export default function LoginPage() {
       router.refresh();
     } catch (err) {
       logAuthError("Login Unexpected Error", err);
-      const cleanMsg = getErrorMessage(err);
-      setAuthError(cleanMsg);
-      toast.error("Login Error", { description: cleanMsg });
+      const parsed = parseAuthError(err);
+      logger.error("Login unexpected error", { operation: "auth.login", category: parsed.category });
+      setAuthError(parsed.message);
+      toast.error(parsed.title, { description: parsed.message });
       setIsSubmitting(false);
     } finally {
       setIsSubmitting(false);

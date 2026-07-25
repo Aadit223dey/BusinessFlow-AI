@@ -10,7 +10,9 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
-import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { parseAuthError } from "@/lib/auth-errors";
+import { logger } from "@/lib/logger";
 
 const forgotPasswordSchema = z.object({
   email: z
@@ -49,10 +51,11 @@ export default function ForgotPasswordPage() {
 
       if (error) {
         logAuthError("Forgot Password Failed", error);
-        const cleanMsg = getErrorMessage(error);
-        setErrorMsg(cleanMsg);
-        toast.error("Request failed", {
-          description: cleanMsg,
+        const parsed = parseAuthError(error);
+        logger.error("Password reset request failed", { operation: "auth.forgot_password", category: parsed.category });
+        setErrorMsg(parsed.message);
+        toast.error(parsed.title, {
+          description: parsed.message,
         });
       } else {
         logAuthTrace("Forgot Password Email Sent", { email: values.email });
@@ -63,9 +66,10 @@ export default function ForgotPasswordPage() {
       }
     } catch (err) {
       logAuthError("Forgot Password Exception", err);
-      const cleanMsg = getErrorMessage(err);
-      setErrorMsg(cleanMsg);
-      toast.error(cleanMsg);
+      const parsed = parseAuthError(err);
+      logger.error("Password reset request exception", { operation: "auth.forgot_password", category: parsed.category });
+      setErrorMsg(parsed.message);
+      toast.error(parsed.title, { description: parsed.message });
     } finally {
       setIsSubmitting(false);
     }

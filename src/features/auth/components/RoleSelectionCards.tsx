@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { motion } from "framer-motion";
 
-import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { parseAuthError } from "@/lib/auth-errors";
+import { logger } from "@/lib/logger";
 
 export function RoleSelectionCards() {
   const router = useRouter();
@@ -28,9 +30,10 @@ export function RoleSelectionCards() {
 
       if (!response.ok) {
         logAuthError("Role Selection API Error", data.error);
-        const cleanMsg = getErrorMessage(data.error);
-        toast.error("Role Selection Failed", {
-          description: cleanMsg,
+        const parsed = parseAuthError(data.error);
+        logger.error("Role selection failed", { operation: "auth.role_selection", category: parsed.category });
+        toast.error(parsed.title, {
+          description: parsed.message,
         });
         setIsSubmitting(false);
         return;
@@ -48,8 +51,9 @@ export function RoleSelectionCards() {
       router.refresh();
     } catch (err) {
       logAuthError("Role Selection Unexpected Exception", err);
-      const cleanMsg = getErrorMessage(err);
-      toast.error("Role Error", { description: cleanMsg });
+      const parsed = parseAuthError(err);
+      logger.error("Role selection unexpected error", { operation: "auth.role_selection", category: parsed.category });
+      toast.error(parsed.title, { description: parsed.message });
       setIsSubmitting(false);
     }
   };

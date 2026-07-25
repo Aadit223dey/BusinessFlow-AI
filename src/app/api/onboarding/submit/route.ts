@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { env } from "@/config/env";
 import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { logger } from "@/lib/logger";
 
 /**
  * Secure Transactional Workspace Provisioning Router
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
     }
 
     logAuthTrace("Onboarding submission started", { userId: user.id, email: user.email });
+    logger.info("Onboarding submission initiated", { operation: "onboarding.submit", userId: user.id });
 
     // 2. Check existing profile status
     const { data: existingProfile, error: profileError } = await supabase

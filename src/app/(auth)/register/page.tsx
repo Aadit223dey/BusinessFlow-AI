@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 
-import { getErrorMessage, logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { parseAuthError } from "@/lib/auth-errors";
+import { logger } from "@/lib/logger";
 
 const registerSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -65,6 +67,7 @@ export default function RegisterPage() {
     setIsSubmitting(true);
     setErrorMsg(null);
     logAuthTrace("User Signup Initiated", { email: values.email });
+    logger.info("Registration attempt initiated", { operation: "auth.register", userId: values.email });
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -81,10 +84,11 @@ export default function RegisterPage() {
 
       if (error) {
         logAuthError("User Signup Failed", error);
-        const cleanMessage = getErrorMessage(error);
-        setErrorMsg(cleanMessage);
-        toast.error("Registration failed", {
-          description: cleanMessage,
+        const parsed = parseAuthError(error);
+        logger.error("Registration failed", { operation: "auth.register", category: parsed.category });
+        setErrorMsg(parsed.message);
+        toast.error(parsed.title, {
+          description: parsed.message,
         });
       } else {
         logAuthTrace("User Signup Success", { userId: data.user?.id, email: data.user?.email });
@@ -95,9 +99,10 @@ export default function RegisterPage() {
       }
     } catch (err) {
       logAuthError("SignUp Unexpected Exception", err);
-      const cleanMessage = getErrorMessage(err);
-      setErrorMsg(cleanMessage);
-      toast.error("Registration Error", { description: cleanMessage });
+      const parsed = parseAuthError(err);
+      logger.error("Registration unexpected error", { operation: "auth.register", category: parsed.category });
+      setErrorMsg(parsed.message);
+      toast.error(parsed.title, { description: parsed.message });
     } finally {
       setIsSubmitting(false);
     }

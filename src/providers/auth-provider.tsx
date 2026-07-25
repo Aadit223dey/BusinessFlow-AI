@@ -5,6 +5,7 @@ import { type User, type Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { type UserRole, type UserProfile } from "@/types";
 import { logAuthTrace, logAuthError } from "@/lib/error-utils";
+import { logger } from "@/lib/logger";
 
 export interface AuthContextType {
   user: User | null;
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initializeAuth = async () => {
       try {
         logAuthTrace("Initializing Auth Session...");
+        logger.debug("Initializing Auth Session", { operation: "auth.init" });
         const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {

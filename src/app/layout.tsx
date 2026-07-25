@@ -102,7 +102,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
-      <body className="min-h-full flex flex-col font-sans antialiased">
+      <body className="min-h-full flex flex-col font-sans antialiased" suppressHydrationWarning>
         <ErrorBoundary fallback={<ErrorFallback />}>
           <GlobalProviders>
             <div className="flex flex-col min-h-screen">
