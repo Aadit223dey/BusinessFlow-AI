@@ -83,6 +83,11 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // Explicitly allow candidate invitation acceptance route for all traffic
+  if (pathname.startsWith("/invite/accept")) {
+    return response;
+  }
+
   // ─── 2. Super Admin Check (Email or Role) ───────────────────────────────
   const isSuperAdminEmail =
     user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
