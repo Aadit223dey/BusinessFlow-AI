@@ -91,7 +91,7 @@ export default function LoginPage() {
       } else {
         logAuthTrace("Profile Retrieved on Login", profile);
 
-        if (profile?.role === "SUPER_ADMIN" || user.email?.toLowerCase() === "dey223aadit@gmail.com") {
+        if (profile?.role === "SUPER_ADMIN" || user.email?.toLowerCase() === "developer223aadit@gmail.com") {
           router.replace("/admin-portal");
         } else if (!profile?.has_selected_role) {
           router.replace("/select-role");
