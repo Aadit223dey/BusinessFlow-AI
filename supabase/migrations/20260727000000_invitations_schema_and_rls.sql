@@ -1,5 +1,39 @@
 -- ========================================================
--- 1. CREATE INVITATIONS STATUS ENUM
+-- 1. SECURITY DEFINER HELPER FUNCTIONS (REQUIRED FOR RLS)
+-- ========================================================
+CREATE OR REPLACE FUNCTION public.get_current_user_role()
+RETURNS public.user_role AS $$
+DECLARE
+  v_role public.user_role;
+BEGIN
+  SELECT role INTO v_role
+  FROM public.profiles
+  WHERE id = auth.uid();
+  RETURN v_role;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE OR REPLACE FUNCTION public.get_current_user_tenant_id()
+RETURNS UUID AS $$
+DECLARE
+  v_tenant_id UUID;
+BEGIN
+  SELECT tenant_id INTO v_tenant_id
+  FROM public.profiles
+  WHERE id = auth.uid();
+  RETURN v_tenant_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE OR REPLACE FUNCTION public.is_super_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN (public.get_current_user_role() = 'SUPER_ADMIN'::public.user_role);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- ========================================================
+-- 2. CREATE INVITATIONS STATUS ENUM
 -- ========================================================
 DO $$ BEGIN
   CREATE TYPE public.invitation_status AS ENUM ('pending', 'accepted', 'expired', 'cancelled');
@@ -8,7 +42,7 @@ EXCEPTION
 END $$;
 
 -- ========================================================
--- 2. CREATE INVITATIONS TABLE
+-- 3. CREATE INVITATIONS TABLE
 -- ========================================================
 CREATE TABLE IF NOT EXISTS public.invitations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -49,7 +83,7 @@ BEFORE UPDATE ON public.invitations
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- ========================================================
--- 3. ROW-LEVEL SECURITY (RLS) & NON-RECURSIVE POLICIES
+-- 4. ROW-LEVEL SECURITY (RLS) & NON-RECURSIVE POLICIES
 -- ========================================================
 ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
 
