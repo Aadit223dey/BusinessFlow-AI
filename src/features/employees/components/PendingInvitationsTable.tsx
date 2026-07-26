@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Clock, CheckCircle2, AlertTriangle, Trash2, Shield, User } from "lucide-react";
+import { Mail, Clock, CheckCircle2, AlertTriangle, Trash2, Shield, User, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { type Invitation, type UserProfile } from "@/types";
@@ -30,20 +30,20 @@ export function PendingInvitationsTable({
     return `${days} days remaining`;
   };
 
-  const handleRevoke = async (id: string) => {
+  const handleCancel = async (id: string) => {
     setActionLoadingId(id);
     try {
-      toast.success("Invitation revoked successfully");
+      toast.success("Invitation cancelled successfully");
       onRefresh();
     } catch {
-      toast.error("Failed to revoke invitation");
+      toast.error("Failed to cancel invitation");
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const handleCopyLink = (token: string) => {
-    const url = `${window.location.origin}/invite/accept?token=${token}`;
+  const handleCopyLink = (invitationToken: string) => {
+    const url = `${window.location.origin}/invite/accept?token=${invitationToken}`;
     navigator.clipboard.writeText(url);
     toast.success("Invite URL copied to clipboard! 📋", {
       description: url,
@@ -106,7 +106,7 @@ export function PendingInvitationsTable({
                 <thead className="bg-muted/50 border-b border-border text-muted-foreground font-semibold">
                   <tr>
                     <th className="px-6 py-3.5">Email Address</th>
-                    <th className="px-6 py-3.5">Role</th>
+                    <th className="px-6 py-3.5">Invited Role</th>
                     <th className="px-6 py-3.5">Sent Date</th>
                     <th className="px-6 py-3.5">Expires In</th>
                     <th className="px-6 py-3.5">Status</th>
@@ -115,14 +115,15 @@ export function PendingInvitationsTable({
                 </thead>
                 <tbody className="divide-y divide-border">
                   {invitations.map((invite) => {
-                    const isExpired = new Date(invite.expires_at).getTime() <= Date.now();
+                    const isExpired = new Date(invite.expires_at).getTime() <= Date.now() || invite.status === "expired";
+                    const isCancelled = invite.status === "cancelled";
                     return (
                       <tr key={invite.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-6 py-4 font-medium text-foreground">{invite.email}</td>
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary">
                             <Shield className="h-3 w-3" />
-                            {invite.role}
+                            {invite.invited_role || "STAFF"}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-muted-foreground">
@@ -132,7 +133,12 @@ export function PendingInvitationsTable({
                           {formatDaysRemaining(invite.expires_at)}
                         </td>
                         <td className="px-6 py-4">
-                          {isExpired || invite.status === "EXPIRED" ? (
+                          {isCancelled ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border">
+                              <XCircle className="h-3 w-3" />
+                              Cancelled
+                            </span>
+                          ) : isExpired ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-destructive/10 text-destructive border border-destructive/20">
                               <AlertTriangle className="h-3 w-3" />
                               Expired
@@ -145,23 +151,27 @@ export function PendingInvitationsTable({
                           )}
                         </td>
                         <td className="px-6 py-4 text-right space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleCopyLink(invite.token)}
-                            className="text-xs"
-                          >
-                            Copy Link
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRevoke(invite.id)}
-                            disabled={actionLoadingId === invite.id}
-                            className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {!isCancelled && !isExpired && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCopyLink(invite.invitation_token)}
+                              className="text-xs"
+                            >
+                              Copy Link
+                            </Button>
+                          )}
+                          {!isCancelled && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCancel(invite.id)}
+                              disabled={actionLoadingId === invite.id}
+                              className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     );

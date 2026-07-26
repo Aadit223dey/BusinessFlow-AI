@@ -31,12 +31,12 @@ export async function GET(request: Request) {
       }
     );
 
-    // Fetch invitation record
+    // Fetch invitation record using invitation_token
     const { data: invitation, error } = await supabase
       .from("invitations")
-      .select("id, tenant_id, invited_by, email, role, status, expires_at")
-      .eq("token", token)
-      .single();
+      .select("id, tenant_id, invited_by, email, invited_role, status, expires_at")
+      .eq("invitation_token", token)
+      .maybeSingle();
 
     if (error || !invitation) {
       logger.warn("Invitation token lookup failed: Invalid token", {
@@ -45,14 +45,14 @@ export async function GET(request: Request) {
       });
       return NextResponse.json(
         { error: "This invitation link is invalid or does not exist." },
-        { status: 404 }
+        { status: 400 }
       );
     }
 
     // Check status
-    if (invitation.status !== "PENDING") {
+    if (invitation.status !== "pending") {
       return NextResponse.json(
-        { error: `This invitation link is no longer valid (Status: ${invitation.status}).` },
+        { error: `This invitation link is no longer active (Status: ${invitation.status}).` },
         { status: 400 }
       );
     }
@@ -60,10 +60,10 @@ export async function GET(request: Request) {
     // Check expiration
     const isExpired = new Date(invitation.expires_at).getTime() <= Date.now();
     if (isExpired) {
-      // Mark as EXPIRED
+      // Mark as expired
       await supabase
         .from("invitations")
-        .update({ status: "EXPIRED" })
+        .update({ status: "expired" })
         .eq("id", invitation.id);
 
       logger.warn("Invitation token expired", {
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
 
       return NextResponse.json(
         { error: "This invitation link has expired. Please request a new invitation." },
-        { status: 400 }
+        { status: 410 }
       );
     }
 
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
       .eq("id", invitation.invited_by)
       .single();
 
-    const businessName = tenant?.name || "BusinessFlow AI Workspace";
+    const tenantName = tenant?.name || "BusinessFlow AI Workspace";
     const inviterName = inviterProfile?.first_name
       ? `${inviterProfile.first_name} ${inviterProfile.last_name || ""}`.trim()
       : "Business Owner";
@@ -103,14 +103,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       valid: true,
-      invitation: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role,
-        businessName,
-        inviterName,
-        expiresAt: invitation.expires_at,
-      },
+      email: invitation.email,
+      tenantName,
+      invitedRole: invitation.invited_role,
+      expiresAt: invitation.expires_at,
+      inviterName,
     });
   } catch (err) {
     logger.error("Unexpected error validating invitation token", {

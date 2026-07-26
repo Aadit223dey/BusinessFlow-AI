@@ -8,8 +8,8 @@ import { logger } from "@/lib/logger";
 import { parseAuthError } from "@/lib/auth-errors";
 
 const createInviteSchema = z.object({
-  email: z.string().min(1, "Email is required").email("Invalid email address"),
-  role: z.literal("STAFF").default("STAFF"),
+  email: z.string().min(1, "Email is required").email("Invalid email address").transform((val) => val.toLowerCase().trim()),
+  invited_role: z.literal("STAFF").optional().default("STAFF"),
 });
 
 export async function POST(request: Request) {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       }
     );
 
-    // 1. Verify requester session & role
+    // 1. Authenticate user & verify BUSINESS_OWNER profile
     const {
       data: { user },
       error: authError,
@@ -43,7 +43,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    // Retrieve inviter profile to verify BUSINESS_OWNER status and tenant_id
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id, role, tenant_id, first_name, last_name")
@@ -61,19 +60,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Retrieve tenant details
-    const { data: tenant } = await supabase
-      .from("tenants")
-      .select("name")
-      .eq("id", profile.tenant_id)
-      .single();
-
-    const businessName = tenant?.name || "BusinessFlow AI Workspace";
-    const inviterName = profile.first_name
-      ? `${profile.first_name} ${profile.last_name || ""}`.trim()
-      : user.email || "Business Owner";
-
-    // 2. Validate payload
+    // 2. Validate request payload
     const body = await request.json();
     const validation = createInviteSchema.safeParse(body);
 
@@ -84,23 +71,39 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email } = validation.data;
+    const { email, invited_role } = validation.data;
 
-    // 3. Generate crypto-secure 32-character token
-    const token = crypto.randomBytes(16).toString("hex");
+    // 3. Duplicate Prevention: Check if active (pending) invitation already exists for this tenant
+    const { data: existingInvite } = await supabase
+      .from("invitations")
+      .select("id")
+      .eq("tenant_id", profile.tenant_id)
+      .eq("email", email)
+      .eq("status", "pending")
+      .maybeSingle();
 
-    // 4. Insert row into public.invitations
+    if (existingInvite) {
+      return NextResponse.json(
+        { error: "An active invitation has already been sent to this email address." },
+        { status: 409 }
+      );
+    }
+
+
+    // 5. Generate 32-character hexadecimal cryptographically secure token
+    const invitation_token = crypto.randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+    // 6. Insert row into public.invitations
     const { data: invitation, error: insertError } = await supabase
       .from("invitations")
       .insert({
         tenant_id: profile.tenant_id,
         invited_by: profile.id,
-        email: email.toLowerCase().trim(),
-        role: "STAFF",
-        token,
-        status: "PENDING",
+        email,
+        invited_role,
+        invitation_token,
+        status: "pending",
         expires_at: expiresAt,
       })
       .select()
@@ -115,17 +118,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.message }, { status: 400 });
     }
 
-    // Construct full invitation URL
+    // Construct invitation link
     const origin = request.headers.get("origin") || request.headers.get("referer") || "http://localhost:3000";
-    const inviteLink = `${origin}/invite/accept?token=${token}`;
+    const inviteLink = `${origin}/invite/accept?token=${invitation_token}`;
 
-    // Log structured trace for development and delivery
-    logger.info("Staff invitation link generated", {
+    logger.info("Staff invitation created successfully", {
       operation: "invitations.create",
       invitationId: invitation.id,
       email,
-      businessName,
-      inviterName,
       inviteLink,
     });
 
@@ -133,11 +133,7 @@ export async function POST(request: Request) {
       {
         message: "Staff invitation created successfully.",
         invitation: {
-          id: invitation.id,
-          email: invitation.email,
-          role: invitation.role,
-          status: invitation.status,
-          expires_at: invitation.expires_at,
+          ...invitation,
           inviteLink,
         },
       },

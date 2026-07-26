@@ -34,20 +34,20 @@ export function InviteStaffModal({ isOpen, onClose, onSuccess }: InviteStaffModa
       const response = await fetch("/api/invitations/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), role: "STAFF" }),
+        body: JSON.stringify({ email: email.trim(), invited_role: "STAFF" }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        const parsed = parseAuthError(data.error);
-        setErrorMsg(parsed.message);
-        toast.error(parsed.title, { description: parsed.message });
+        const errorText = data.error || "Failed to create staff invitation";
+        setErrorMsg(errorText);
+        toast.error("Invitation Failed", { description: errorText });
         return;
       }
 
       toast.success("Invitation Sent! 🚀", {
-        description: `An invitation has been generated for ${email}.`,
+        description: `An invitation link has been generated for ${email}.`,
       });
 
       setEmail("");

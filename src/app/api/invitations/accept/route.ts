@@ -51,12 +51,12 @@ export async function POST(request: Request) {
       }
     );
 
-    // 1. Fetch & re-validate invitation record
+    // 1. Fetch & re-validate invitation record using invitation_token
     const { data: invitation, error: invError } = await supabase
       .from("invitations")
       .select("id, tenant_id, email, status, expires_at")
-      .eq("token", token)
-      .single();
+      .eq("invitation_token", token)
+      .maybeSingle();
 
     if (invError || !invitation) {
       return NextResponse.json(
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (invitation.status !== "PENDING") {
+    if (invitation.status !== "pending") {
       return NextResponse.json(
         { error: `Invitation is no longer active (Status: ${invitation.status}).` },
         { status: 400 }
@@ -75,12 +75,12 @@ export async function POST(request: Request) {
     if (new Date(invitation.expires_at).getTime() <= Date.now()) {
       await supabase
         .from("invitations")
-        .update({ status: "EXPIRED" })
+        .update({ status: "expired" })
         .eq("id", invitation.id);
 
       return NextResponse.json(
         { error: "Invitation has expired. Please request a new invitation link." },
-        { status: 400 }
+        { status: 410 }
       );
     }
 
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     const userId = authData.user?.id;
 
     if (userId) {
-      // 3. Update public.profiles row with role = 'STAFF', tenant_id, and onboarding flags
+      // 3. Update public.profiles row setting role = 'STAFF', tenant_id, onboarding flags
       const { error: profileError } = await supabase
         .from("profiles")
         .upsert({
@@ -133,10 +133,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Update public.invitations status to 'ACCEPTED'
+    // 4. Update public.invitations status to 'accepted' & accepted_at = NOW()
     await supabase
       .from("invitations")
-      .update({ status: "ACCEPTED" })
+      .update({
+        status: "accepted",
+        accepted_at: new Date().toISOString(),
+      })
       .eq("id", invitation.id);
 
     logger.info("Invitation accepted successfully. Candidate account created and linked.", {
