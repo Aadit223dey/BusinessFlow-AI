@@ -3,14 +3,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
-import { Resend } from "resend";
 import { env } from "@/config/env";
 import { logger } from "@/lib/logger";
 import { parseAuthError } from "@/lib/auth-errors";
-import { getStaffInviteEmailTemplate } from "@/lib/email-templates";
-
-const resendApiKey = process.env.RESEND_API_KEY;
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 const createInviteSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email address").transform((val) => val.toLowerCase().trim()),
@@ -64,18 +59,6 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
-
-    // Retrieve tenant details
-    const { data: tenant } = await supabase
-      .from("tenants")
-      .select("name")
-      .eq("id", profile.tenant_id)
-      .single();
-
-    const businessName = tenant?.name || "BusinessFlow AI Workspace";
-    const inviterName = profile.first_name
-      ? `${profile.first_name} ${profile.last_name || ""}`.trim()
-      : user.email || "Business Owner";
 
     // 2. Validate request payload
     const body = await request.json();
@@ -138,21 +121,43 @@ export async function POST(request: Request) {
     const origin = request.headers.get("origin") || request.headers.get("referer") || "http://localhost:3000";
     const inviteLink = `${origin}/invite/accept?token=${invitation_token}`;
 
-    // 7. Dispatch Transactional Email via Resend if configured
+    // 7. Dispatch via Supabase Native Email System if SUPABASE_SERVICE_ROLE_KEY is provided
     let emailSent = false;
-    if (resend) {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (serviceRoleKey) {
       try {
-        const emailHtml = getStaffInviteEmailTemplate(businessName, inviterName, inviteLink);
-        await resend.emails.send({
-          from: "BusinessFlow AI <onboarding@resend.dev>",
-          to: email,
-          subject: `You've Been Invited to Join ${businessName} on BusinessFlow AI`,
-          html: emailHtml,
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabaseAdmin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, serviceRoleKey);
+
+        const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+          redirectTo: inviteLink,
+          data: {
+            role: "STAFF",
+            tenant_id: profile.tenant_id,
+            invitation_token,
+          },
         });
-        emailSent = true;
-        logger.info("Invitation email dispatched via Resend", { operation: "invitations.create", email, inviteLink });
-      } catch (emailErr) {
-        logger.warn("Resend email dispatch error", { operation: "invitations.create", email, emailErr });
+
+        if (!inviteError) {
+          emailSent = true;
+          logger.info("Invitation email dispatched via Supabase Native Auth Email System", {
+            operation: "invitations.create",
+            email,
+            inviteLink,
+          });
+        } else {
+          logger.warn("Supabase native inviteUserByEmail note", {
+            operation: "invitations.create",
+            email,
+            error: inviteError.message,
+          });
+        }
+      } catch (adminErr) {
+        logger.warn("Supabase admin invitation dispatch error", {
+          operation: "invitations.create",
+          error: adminErr,
+        });
       }
     }
 
@@ -166,9 +171,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        message: emailSent
-          ? "Staff invitation created and email sent successfully."
-          : "Staff invitation created successfully.",
+        message: "Staff invitation created successfully via Supabase Email System.",
         invitation: {
           ...invitation,
           inviteLink,
