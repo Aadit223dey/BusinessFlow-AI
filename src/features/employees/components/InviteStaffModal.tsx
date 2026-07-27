@@ -46,8 +46,18 @@ export function InviteStaffModal({ isOpen, onClose, onSuccess }: InviteStaffModa
         return;
       }
 
-      toast.success("Invitation Sent! 🚀", {
-        description: `An invitation link has been generated for ${email}.`,
+      if (data.invitation?.inviteLink) {
+        try {
+          await navigator.clipboard.writeText(data.invitation.inviteLink);
+        } catch {
+          // Clipboard fallback
+        }
+      }
+
+      toast.success("Invitation Created! 🚀", {
+        description: data.invitation?.emailSent
+          ? `Invitation email sent to ${email}. Link copied to clipboard!`
+          : `Invitation created for ${email}. Link copied to clipboard for instant testing!`,
       });
 
       setEmail("");

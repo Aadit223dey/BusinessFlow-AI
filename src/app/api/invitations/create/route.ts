@@ -3,9 +3,14 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
+import { Resend } from "resend";
 import { env } from "@/config/env";
 import { logger } from "@/lib/logger";
 import { parseAuthError } from "@/lib/auth-errors";
+import { getStaffInviteEmailTemplate } from "@/lib/email-templates";
+
+const resendApiKey = process.env.RESEND_API_KEY;
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 const createInviteSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email address").transform((val) => val.toLowerCase().trim()),
@@ -60,6 +65,18 @@ export async function POST(request: Request) {
       );
     }
 
+    // Retrieve tenant details
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("name")
+      .eq("id", profile.tenant_id)
+      .single();
+
+    const businessName = tenant?.name || "BusinessFlow AI Workspace";
+    const inviterName = profile.first_name
+      ? `${profile.first_name} ${profile.last_name || ""}`.trim()
+      : user.email || "Business Owner";
+
     // 2. Validate request payload
     const body = await request.json();
     const validation = createInviteSchema.safeParse(body);
@@ -89,12 +106,11 @@ export async function POST(request: Request) {
       );
     }
 
-
-    // 5. Generate 32-character hexadecimal cryptographically secure token
+    // 4. Generate 32-character hexadecimal cryptographically secure token
     const invitation_token = crypto.randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    // 6. Insert row into public.invitations
+    // 5. Insert row into public.invitations
     const { data: invitation, error: insertError } = await supabase
       .from("invitations")
       .insert({
@@ -118,23 +134,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.message }, { status: 400 });
     }
 
-    // Construct invitation link
+    // 6. Construct invitation link
     const origin = request.headers.get("origin") || request.headers.get("referer") || "http://localhost:3000";
     const inviteLink = `${origin}/invite/accept?token=${invitation_token}`;
 
-    logger.info("Staff invitation created successfully", {
+    // 7. Dispatch Transactional Email via Resend if configured
+    let emailSent = false;
+    if (resend) {
+      try {
+        const emailHtml = getStaffInviteEmailTemplate(businessName, inviterName, inviteLink);
+        await resend.emails.send({
+          from: "BusinessFlow AI <onboarding@resend.dev>",
+          to: email,
+          subject: `You've Been Invited to Join ${businessName} on BusinessFlow AI`,
+          html: emailHtml,
+        });
+        emailSent = true;
+        logger.info("Invitation email dispatched via Resend", { operation: "invitations.create", email, inviteLink });
+      } catch (emailErr) {
+        logger.warn("Resend email dispatch error", { operation: "invitations.create", email, emailErr });
+      }
+    }
+
+    logger.info("Staff invitation record created successfully", {
       operation: "invitations.create",
       invitationId: invitation.id,
       email,
       inviteLink,
+      emailSent,
     });
 
     return NextResponse.json(
       {
-        message: "Staff invitation created successfully.",
+        message: emailSent
+          ? "Staff invitation created and email sent successfully."
+          : "Staff invitation created successfully.",
         invitation: {
           ...invitation,
           inviteLink,
+          emailSent,
         },
       },
       { status: 201 }
