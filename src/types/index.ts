@@ -8,6 +8,12 @@ export interface UserProfile {
   first_name?: string | null;
   last_name?: string | null;
   tenant_id?: string | null;
+  phone?: string | null;
+  avatar_url?: string | null;
+  address?: string | null;
+  date_of_birth?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
   created_at?: string;
   updated_at?: string;
 }

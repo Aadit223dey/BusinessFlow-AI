@@ -65,7 +65,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/settings") ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/select-role") ||
-    pathname.startsWith("/customer-portal") ||
+    pathname.startsWith("/customer") ||
     pathname.startsWith("/staff-portal") ||
     pathname.startsWith("/admin-portal");
 
@@ -132,7 +132,7 @@ export async function middleware(request: NextRequest) {
         isAuthRoute ||
         pathname.startsWith("/select-role") ||
         pathname.startsWith("/onboarding") ||
-        pathname.startsWith("/customer-portal") ||
+        pathname.startsWith("/customer") ||
         pathname.startsWith("/staff-portal") ||
         pathname.startsWith("/admin-portal")
       ) {
@@ -144,8 +144,8 @@ export async function middleware(request: NextRequest) {
 
   // ─── Path D: Customer ───────────────────────────────────────────────────
   if (role === "CUSTOMER") {
-    if (!pathname.startsWith("/customer-portal")) {
-      return NextResponse.redirect(new URL("/customer-portal", request.url));
+    if (!pathname.startsWith("/customer")) {
+      return NextResponse.redirect(new URL("/customer/dashboard", request.url));
     }
     return response;
   }
