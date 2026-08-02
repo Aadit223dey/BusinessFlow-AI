@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { Headset } from "lucide-react";
 
 interface CustomerWelcomeHeroProps {
   firstName: string;
@@ -21,12 +22,21 @@ export const CustomerWelcomeHero = ({ firstName }: CustomerWelcomeHeroProps) => 
       <p className="text-slate-600 dark:text-slate-300 mb-6 max-w-xl">
         Here is a quick overview of your appointments, messages, and connected service providers.
       </p>
-      <Link
-        href="/customer/services"
-        className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors"
-      >
-        Explore Services
-      </Link>
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          href="/customer/services"
+          className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors"
+        >
+          Explore Services
+        </Link>
+        <Link
+          href="/customer/desk"
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold transition-colors"
+        >
+          <Headset className="h-4 w-4" />
+          <span>Go to Customer Desk</span>
+        </Link>
+      </div>
     </motion.div>
   );
 };

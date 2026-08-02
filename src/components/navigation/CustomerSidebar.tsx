@@ -10,6 +10,7 @@ import {
   FileText,
   MessageSquare,
   Bell,
+  Headset,
   UserCircle,
   Settings,
   ChevronLeft,
@@ -21,6 +22,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const navItems = [
   { name: "Dashboard", href: "/customer/dashboard", icon: LayoutDashboard },
+  { name: "Customer Desk", href: "/customer/desk", icon: Headset, badge: "Desk" },
   { name: "Appointments", href: "/customer/appointments", icon: CalendarCheck },
   { name: "Services", href: "/customer/services", icon: Briefcase },
   { name: "Orders", href: "/customer/orders", icon: ShoppingBag },
@@ -130,6 +132,18 @@ export function CustomerSidebar() {
 
                 {!isCollapsed && (
                   <span className="truncate flex-1">{item.name}</span>
+                )}
+
+                {!isCollapsed && item.badge && (
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
                 )}
 
                 {/* Collapsed active dot indicator */}

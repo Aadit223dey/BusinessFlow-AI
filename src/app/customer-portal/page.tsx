@@ -114,19 +114,19 @@ export default function CustomerPortalPage() {
             <Button
               variant="primary"
               size="default"
-              className="w-full sm:w-auto gap-2 font-bold"
-              onClick={() => toast.info("Demo Mode", { description: "Service discovery catalog coming in Sprint 5!" })}
+              className="w-full sm:w-auto gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => router.push("/customer/desk")}
             >
-              <span>Browse Sample Services (Demo)</span>
+              <span>Go to Customer Desk</span>
               <ArrowRight className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
               size="default"
-              className="w-full sm:w-auto text-muted-foreground"
-              onClick={handleSignOut}
+              className="w-full sm:w-auto font-bold border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+              onClick={() => router.push("/customer/dashboard")}
             >
-              Sign Out
+              <span>Customer Workspace Dashboard</span>
             </Button>
           </div>
         </div>

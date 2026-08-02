@@ -10,6 +10,7 @@ import {
   ChevronRight,
   LogOut,
   User as UserIcon,
+  Headset,
 } from "lucide-react";
 import { useSidebarStore } from "@/hooks/use-sidebar-store";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -142,6 +143,16 @@ export function CustomerTopNav({
             <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card" />
           </button>
 
+          {/* Customer Desk Shortcut Button */}
+          <Link
+            href="/customer/desk"
+            className="flex h-9 items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all"
+            title="Customer Help Desk"
+          >
+            <Headset className="h-4 w-4" />
+            <span className="hidden sm:inline">Customer Desk</span>
+          </Link>
+
           {/* Theme Toggle */}
           <ThemeToggle />
 
@@ -162,7 +173,7 @@ export function CustomerTopNav({
               <div className="hidden text-left sm:block pr-1">
                 <p className="text-xs font-bold leading-tight text-foreground">{userName}</p>
                 <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  CUSTOMER
+                  Client Profile
                 </p>
               </div>
             </button>
@@ -203,6 +214,15 @@ export function CustomerTopNav({
 
                     {/* Actions */}
                     <div className="space-y-1 pt-1">
+                      <Link
+                        href="/customer/desk"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+                      >
+                        <Headset className="h-4 w-4" />
+                        <span>Customer Desk</span>
+                      </Link>
+
                       <Link
                         href="/customer/profile"
                         onClick={() => setIsProfileOpen(false)}
