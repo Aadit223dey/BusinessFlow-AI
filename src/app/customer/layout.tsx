@@ -9,6 +9,8 @@ import { CustomerLayoutContainer } from '@/components/navigation/CustomerLayoutC
 export const dynamic = 'force-dynamic';
 
 export default async function CustomerLayout({ children }: { children: React.ReactNode }) {
+  console.log("🔍 [DIAGNOSTIC] Customer Layout: Shell Rendered", { timestamp: Date.now() });
+
   const cookieStore = await cookies();
   const supabase = createServerClient(
     env.NEXT_PUBLIC_SUPABASE_URL,

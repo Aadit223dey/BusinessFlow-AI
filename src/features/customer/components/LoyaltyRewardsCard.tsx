@@ -1,9 +1,17 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { Gift } from "lucide-react";
 
 export const LoyaltyRewardsCard = () => {
+  useEffect(() => {
+    console.log("🔍 [DIAGNOSTIC] Widget Rendered:", {
+      widgetName: "LoyaltyRewardsCard",
+      status: "static / success",
+    });
+  }, []);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

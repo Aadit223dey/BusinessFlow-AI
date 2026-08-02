@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/providers/auth-provider";
 import { CustomerWelcomeHero } from "@/features/customer/components/CustomerWelcomeHero";
@@ -20,8 +21,18 @@ const container = {
 };
 
 export default function CustomerDashboardPage() {
-  const { profile } = useAuth();
-  const firstName = profile?.first_name || 'there';
+  const { profile, user, isLoading } = useAuth();
+
+  useEffect(() => {
+    console.log("🔍 [DIAGNOSTIC] Customer Dashboard: Page Mounted", {
+      profileLoaded: !!profile,
+      userId: user?.id,
+      isLoading,
+      timestamp: Date.now(),
+    });
+  }, [profile, user, isLoading]);
+
+  const firstName = profile?.first_name || (user?.email ? user.email.split("@")[0] : 'there');
 
   return (
     <motion.div 
@@ -30,7 +41,7 @@ export default function CustomerDashboardPage() {
       animate="show"
       className="space-y-6"
     >
-      <CustomerWelcomeHero firstName={firstName} />
+      <CustomerWelcomeHero firstName={firstName} isLoadingProfile={isLoading && !profile} />
       
       <CustomerSummaryMetrics 
         stats={{ 
@@ -42,11 +53,11 @@ export default function CustomerDashboardPage() {
       />
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <UpcomingAppointmentsCard />
-        <CustomerActivityFeed />
+        <UpcomingAppointmentsCard userId={user?.id} />
+        <CustomerActivityFeed userId={user?.id} />
       </div>
       
-      <ConnectedBusinessesGrid />
+      <ConnectedBusinessesGrid userId={user?.id} />
       <LoyaltyRewardsCard />
     </motion.div>
   );

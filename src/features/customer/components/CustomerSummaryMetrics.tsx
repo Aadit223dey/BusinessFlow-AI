@@ -1,14 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { CalendarCheck, CheckCircle, Building2, FileText } from "lucide-react";
 
 interface CustomerSummaryMetricsProps {
-  stats: {
-    upcomingBookings: number;
-    completedServices: number;
-    connectedBusinesses: number;
-    activeInvoices: number;
+  stats?: {
+    upcomingBookings?: number;
+    completedServices?: number;
+    connectedBusinesses?: number;
+    activeInvoices?: number;
   };
 }
 
@@ -28,10 +29,22 @@ const item = {
 };
 
 export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) => {
+  useEffect(() => {
+    console.log("🔍 [DIAGNOSTIC] Widget Rendered:", {
+      widgetName: "CustomerSummaryMetrics",
+      status: "success (defaults 0)",
+    });
+  }, []);
+
+  const upcomingBookings = stats?.upcomingBookings ?? 0;
+  const completedServices = stats?.completedServices ?? 0;
+  const connectedBusinesses = stats?.connectedBusinesses ?? 0;
+  const activeInvoices = stats?.activeInvoices ?? 0;
+
   const cards = [
     {
       title: "Upcoming Bookings",
-      value: stats.upcomingBookings,
+      value: upcomingBookings,
       icon: CalendarCheck,
       color: "text-emerald-500",
       bgColor: "bg-emerald-500/10",
@@ -39,7 +52,7 @@ export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) =
     },
     {
       title: "Completed Services",
-      value: stats.completedServices,
+      value: completedServices,
       icon: CheckCircle,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
@@ -47,7 +60,7 @@ export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) =
     },
     {
       title: "Connected Businesses",
-      value: stats.connectedBusinesses,
+      value: connectedBusinesses,
       icon: Building2,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
@@ -55,7 +68,7 @@ export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) =
     },
     {
       title: "Active Invoices",
-      value: stats.activeInvoices,
+      value: activeInvoices,
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
