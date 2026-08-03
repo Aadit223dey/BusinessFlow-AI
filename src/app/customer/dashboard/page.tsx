@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/providers/auth-provider";
 import { CustomerErrorBoundary } from "@/components/shared/CustomerErrorBoundary";
@@ -23,6 +23,15 @@ const container = {
 
 export default function CustomerDashboardPage() {
   const { profile, user, isLoading } = useAuth();
+  const [forceRender, setForceRender] = useState(false);
+
+  // Hard 800ms safety timeout: guarantee the page mounts regardless of auth provider loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setForceRender(true);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     console.log("🔍 [DIAGNOSTIC 5/7] Auth Context State in Dashboard:", {
@@ -30,12 +39,13 @@ export default function CustomerDashboardPage() {
       role: profile?.role,
       tenantId: profile?.tenant_id ?? "NULL (Valid for Customer)",
       isLoading,
-      isReady: !isLoading && !!user,
+      forceRender,
+      isReady: (!isLoading || forceRender),
     });
-  }, [user, profile, isLoading]);
+  }, [user, profile, isLoading, forceRender]);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading || forceRender) {
       console.log("🔍 [DIAGNOSTIC 6/7] Dashboard Page Component Mounted", {
         userId: user?.id,
         firstName: profile?.first_name,
@@ -43,16 +53,17 @@ export default function CustomerDashboardPage() {
         timestamp: Date.now(),
       });
     }
-  }, [isLoading, user, profile]);
+  }, [isLoading, forceRender, user, profile]);
 
-  // Derive firstName safely - never block rendering
   const firstName = profile?.first_name
     || (user?.email ? user.email.split("@")[0] : "there");
 
-  // Show lightweight skeleton only during initial auth hydration
-  if (isLoading && !profile && !user) {
+  // Show skeleton only during the first 800ms IF auth is strictly loading and we have no user/profile yet
+  const isHydrating = isLoading && !forceRender && !user && !profile;
+
+  if (isHydrating) {
     return (
-      <div className="space-y-6 animate-pulse">
+      <div className="space-y-6 animate-pulse p-2">
         <div className="h-40 rounded-2xl bg-slate-200/60 dark:bg-slate-800/40" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (

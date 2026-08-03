@@ -33,25 +33,40 @@ export default async function CustomerLayout({ children }: { children: React.Rea
     authError: authError?.message ?? null,
   });
 
-  if (authError || !user) { redirect('/login'); }
+  // Only redirect unauthenticated traffic to /login
+  if (authError || !user) { 
+    redirect('/login'); 
+  }
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('first_name, last_name, role, tenant_id, avatar_url')
+    .select('first_name, last_name, role, tenant_id, avatar_url, has_selected_role')
     .eq('id', user.id)
     .single();
 
   console.log("🔍 [DIAGNOSTIC 3/7] Profile Loaded:", {
-    role: profile?.role,
+    role: profile?.role ?? "NULL",
+    hasSelectedRole: profile?.has_selected_role ?? false,
     tenantId: profile?.tenant_id ?? "NULL (Valid for Customer)",
     firstName: profile?.first_name,
   });
 
-  if (profile?.role !== 'CUSTOMER') {
-    redirect('/login');
+  // Handle role routing explicitly - NEVER send authenticated users to /login to avoid 307 loops with middleware
+  if (!profile || !profile.has_selected_role) {
+    redirect('/select-role');
   }
 
-  const userName = profile?.first_name || profile?.last_name
+  if (profile.role === 'BUSINESS_OWNER') {
+    redirect('/dashboard');
+  } else if (profile.role === 'STAFF') {
+    redirect('/staff-portal');
+  } else if (profile.role === 'SUPER_ADMIN') {
+    redirect('/admin-portal');
+  } else if (profile.role !== 'CUSTOMER') {
+    redirect('/select-role');
+  }
+
+  const userName = profile.first_name || profile.last_name
     ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim()
     : user.email?.split('@')[0] || 'Customer';
 
@@ -59,7 +74,7 @@ export default async function CustomerLayout({ children }: { children: React.Rea
     <CustomerShell
       userName={userName}
       userEmail={user.email || ''}
-      avatarUrl={profile?.avatar_url ?? null}
+      avatarUrl={profile.avatar_url ?? null}
     >
       {children}
     </CustomerShell>

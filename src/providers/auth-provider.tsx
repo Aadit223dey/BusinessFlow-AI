@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react";
 import { type User, type Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { type UserRole, type UserProfile } from "@/types";
@@ -25,26 +25,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isInitialized = useRef(false);
 
   const fetchProfile = async (userId: string) => {
     try {
       logAuthTrace("Fetching profile for user", { userId });
-      const { data, error } = await supabase
+      
+      // Fetch with 4-second safety timeout to prevent hanging
+      const fetchPromise = supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .single();
 
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: new Error("Profile fetch timeout") }), 4000)
+      );
+
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+
       if (error) {
         logAuthError("Error fetching user profile", error);
-        setProfile(null);
-      } else {
+        // Fallback minimal profile structure so app never hangs
+        setProfile((prev) => prev || ({
+          id: userId,
+          role: null,
+          has_selected_role: false,
+          has_completed_onboarding: false,
+          tenant_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as unknown as UserProfile));
+      } else if (data) {
         logAuthTrace("Profile fetched successfully", data);
         setProfile(data as UserProfile);
       }
     } catch (err) {
       logAuthError("Unexpected error fetching profile", err);
-      setProfile(null);
     }
   };
 
@@ -55,6 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     const initializeAuth = async () => {
       try {
         logAuthTrace("Initializing Auth Session...");
@@ -65,8 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           logAuthError("Initial getSession error", sessionError);
         }
 
+        if (!isMounted) return;
+
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
+        
         if (initialSession?.user) {
           logAuthTrace("Initial session established", { userId: initialSession.user.id, email: initialSession.user.email });
           await fetchProfile(initialSession.user.id);
@@ -74,7 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         logAuthError("Failed to initialize auth session", err);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          isInitialized.current = true;
+          setIsLoading(false);
+        }
       }
     };
 
@@ -83,7 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         logAuthTrace("Auth state changed event", { event, userId: currentSession?.user?.id });
-        setIsLoading(true);
+        
+        // Skip INITIAL_SESSION to prevent race condition with initializeAuth()
+        if (event === "INITIAL_SESSION") {
+          return;
+        }
+
+        if (!isMounted) return;
+
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
 
@@ -92,11 +124,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null);
         }
-        setIsLoading(false);
+
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     );
 
+    // Hard safety timeout: Force isLoading = false after 2.5s max under any circumstance
+    const safetyTimer = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.warn("⚠️ [AuthProvider] Safety timeout triggered. Forcing isLoading = false.");
+        setIsLoading(false);
+      }
+    }, 2500);
+
     return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
   }, []);
