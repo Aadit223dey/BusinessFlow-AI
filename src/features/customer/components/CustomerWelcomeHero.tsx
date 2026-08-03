@@ -7,17 +7,16 @@ import { Headset } from "lucide-react";
 
 interface CustomerWelcomeHeroProps {
   firstName: string;
-  isLoadingProfile?: boolean;
 }
 
-export const CustomerWelcomeHero = ({ firstName, isLoadingProfile = false }: CustomerWelcomeHeroProps) => {
+export const CustomerWelcomeHero = ({ firstName }: CustomerWelcomeHeroProps) => {
   useEffect(() => {
-    console.log("🔍 [DIAGNOSTIC] Widget Rendered:", {
+    console.log("🔍 [DIAGNOSTIC 7/7] Widget Mounted:", {
       widgetName: "CustomerWelcomeHero",
-      status: isLoadingProfile ? "hydrating" : "success",
+      status: "success",
       firstName,
     });
-  }, [firstName, isLoadingProfile]);
+  }, [firstName]);
 
   return (
     <motion.div
@@ -26,22 +25,12 @@ export const CustomerWelcomeHero = ({ firstName, isLoadingProfile = false }: Cus
       transition={{ duration: 0.5 }}
       className="bg-gradient-to-r from-emerald-500/5 to-teal-500/5 p-8 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 backdrop-blur-xl"
     >
-      {isLoadingProfile ? (
-        <div className="space-y-3 mb-6">
-          <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-lg" />
-          <div className="h-4 w-96 max-w-full bg-slate-200 dark:bg-slate-800 animate-pulse rounded" />
-        </div>
-      ) : (
-        <>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-            Welcome back, {firstName} 👋
-          </h1>
-          <p className="text-slate-600 dark:text-slate-300 mb-6 max-w-xl">
-            Here is a quick overview of your appointments, messages, and connected service providers.
-          </p>
-        </>
-      )}
-
+      <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+        Welcome back, {firstName} 👋
+      </h1>
+      <p className="text-slate-600 dark:text-slate-300 mb-6 max-w-xl">
+        Here is a quick overview of your appointments, messages, and connected service providers.
+      </p>
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/customer/services"

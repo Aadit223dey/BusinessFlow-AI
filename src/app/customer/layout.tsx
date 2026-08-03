@@ -2,14 +2,12 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { env } from '@/config/env';
-import { CustomerSidebar } from '@/components/navigation/CustomerSidebar';
-import { CustomerTopNav } from '@/components/navigation/CustomerTopNav';
-import { CustomerLayoutContainer } from '@/components/navigation/CustomerLayoutContainer';
+import { CustomerShell } from '@/components/navigation/CustomerShell';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CustomerLayout({ children }: { children: React.ReactNode }) {
-  console.log("🔍 [DIAGNOSTIC] Customer Layout: Shell Rendered", { timestamp: Date.now() });
+  console.log("🔍 [DIAGNOSTIC 1/7] Route Entered: /customer/*", { timestamp: Date.now() });
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -28,6 +26,13 @@ export default async function CustomerLayout({ children }: { children: React.Rea
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  console.log("🔍 [DIAGNOSTIC 2/7] Auth Session Hydrated:", {
+    hasUser: !!user,
+    userId: user?.id,
+    authError: authError?.message ?? null,
+  });
+
   if (authError || !user) { redirect('/login'); }
 
   const { data: profile } = await supabase
@@ -35,6 +40,12 @@ export default async function CustomerLayout({ children }: { children: React.Rea
     .select('first_name, last_name, role, tenant_id, avatar_url')
     .eq('id', user.id)
     .single();
+
+  console.log("🔍 [DIAGNOSTIC 3/7] Profile Loaded:", {
+    role: profile?.role,
+    tenantId: profile?.tenant_id ?? "NULL (Valid for Customer)",
+    firstName: profile?.first_name,
+  });
 
   if (profile?.role !== 'CUSTOMER') {
     redirect('/login');
@@ -45,14 +56,12 @@ export default async function CustomerLayout({ children }: { children: React.Rea
     : user.email?.split('@')[0] || 'Customer';
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 text-foreground transition-colors duration-300">
-      <CustomerSidebar />
-      <CustomerTopNav
-        userName={userName}
-        userEmail={user.email}
-        avatarUrl={profile?.avatar_url}
-      />
-      <CustomerLayoutContainer>{children}</CustomerLayoutContainer>
-    </div>
+    <CustomerShell
+      userName={userName}
+      userEmail={user.email || ''}
+      avatarUrl={profile?.avatar_url ?? null}
+    >
+      {children}
+    </CustomerShell>
   );
 }

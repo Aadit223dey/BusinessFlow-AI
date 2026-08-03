@@ -6,9 +6,10 @@ import { Gift } from "lucide-react";
 
 export const LoyaltyRewardsCard = () => {
   useEffect(() => {
-    console.log("🔍 [DIAGNOSTIC] Widget Rendered:", {
+    console.log("🔍 [DIAGNOSTIC 7/7] Widget Mounted:", {
       widgetName: "LoyaltyRewardsCard",
       status: "static / success",
+      dataLength: 0,
     });
   }, []);
 
@@ -20,12 +21,12 @@ export const LoyaltyRewardsCard = () => {
       className="rounded-2xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200/60 dark:border-slate-800/60 relative overflow-hidden group"
     >
       <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-rose-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-      
+
       <div className="p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6 relative z-10">
         <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500/10 to-orange-500/10 flex items-center justify-center shrink-0">
           <Gift className="w-8 h-8 text-amber-500" />
         </div>
-        
+
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">

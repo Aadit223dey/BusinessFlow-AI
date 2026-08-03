@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/providers/auth-provider";
+import { CustomerErrorBoundary } from "@/components/shared/CustomerErrorBoundary";
 import { CustomerWelcomeHero } from "@/features/customer/components/CustomerWelcomeHero";
 import { CustomerSummaryMetrics } from "@/features/customer/components/CustomerSummaryMetrics";
 import { UpcomingAppointmentsCard } from "@/features/customer/components/UpcomingAppointmentsCard";
@@ -15,50 +16,84 @@ const container = {
   show: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
-    }
-  }
+      staggerChildren: 0.08,
+    },
+  },
 };
 
 export default function CustomerDashboardPage() {
   const { profile, user, isLoading } = useAuth();
 
   useEffect(() => {
-    console.log("🔍 [DIAGNOSTIC] Customer Dashboard: Page Mounted", {
-      profileLoaded: !!profile,
+    console.log("🔍 [DIAGNOSTIC 5/7] Auth Context State in Dashboard:", {
       userId: user?.id,
+      role: profile?.role,
+      tenantId: profile?.tenant_id ?? "NULL (Valid for Customer)",
       isLoading,
-      timestamp: Date.now(),
+      isReady: !isLoading && !!user,
     });
-  }, [profile, user, isLoading]);
+  }, [user, profile, isLoading]);
 
-  const firstName = profile?.first_name || (user?.email ? user.email.split("@")[0] : 'there');
+  useEffect(() => {
+    if (!isLoading) {
+      console.log("🔍 [DIAGNOSTIC 6/7] Dashboard Page Component Mounted", {
+        userId: user?.id,
+        firstName: profile?.first_name,
+        tenantId: profile?.tenant_id ?? "NULL",
+        timestamp: Date.now(),
+      });
+    }
+  }, [isLoading, user, profile]);
+
+  // Derive firstName safely - never block rendering
+  const firstName = profile?.first_name
+    || (user?.email ? user.email.split("@")[0] : "there");
+
+  // Show lightweight skeleton only during initial auth hydration
+  if (isLoading && !profile && !user) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-40 rounded-2xl bg-slate-200/60 dark:bg-slate-800/40" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-28 rounded-2xl bg-slate-200/60 dark:bg-slate-800/40" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="h-64 rounded-2xl bg-slate-200/60 dark:bg-slate-800/40" />
+          <div className="h-64 rounded-2xl bg-slate-200/60 dark:bg-slate-800/40" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <motion.div 
-      variants={container}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
-      <CustomerWelcomeHero firstName={firstName} isLoadingProfile={isLoading && !profile} />
-      
-      <CustomerSummaryMetrics 
-        stats={{ 
-          upcomingBookings: 0, 
-          completedServices: 0, 
-          connectedBusinesses: 0, 
-          activeInvoices: 0 
-        }} 
-      />
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <UpcomingAppointmentsCard userId={user?.id} />
-        <CustomerActivityFeed userId={user?.id} />
-      </div>
-      
-      <ConnectedBusinessesGrid userId={user?.id} />
-      <LoyaltyRewardsCard />
-    </motion.div>
+    <CustomerErrorBoundary moduleName="Customer Dashboard">
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="space-y-6"
+      >
+        <CustomerWelcomeHero firstName={firstName} />
+
+        <CustomerSummaryMetrics
+          stats={{
+            upcomingBookings: 0,
+            completedServices: 0,
+            connectedBusinesses: 0,
+            activeInvoices: 0,
+          }}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <UpcomingAppointmentsCard userId={user?.id} />
+          <CustomerActivityFeed userId={user?.id} />
+        </div>
+
+        <ConnectedBusinessesGrid userId={user?.id} />
+        <LoyaltyRewardsCard />
+      </motion.div>
+    </CustomerErrorBoundary>
   );
 }

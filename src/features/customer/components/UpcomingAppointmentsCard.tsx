@@ -14,10 +14,10 @@ export const UpcomingAppointmentsCard = ({ userId }: UpcomingAppointmentsCardPro
   const { data: appointments, status } = useCustomerAppointments(userId);
 
   useEffect(() => {
-    console.log("🔍 [DIAGNOSTIC] Widget Rendered:", {
+    console.log("🔍 [DIAGNOSTIC 7/7] Widget Mounted:", {
       widgetName: "UpcomingAppointmentsCard",
-      status: `${status} / initialData`,
-      count: appointments?.length || 0,
+      status,
+      dataLength: appointments?.length ?? 0,
     });
   }, [status, appointments]);
 
@@ -31,7 +31,7 @@ export const UpcomingAppointmentsCard = ({ userId }: UpcomingAppointmentsCardPro
       <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">
         Upcoming Appointments
       </h2>
-      
+
       {(!appointments || appointments.length === 0) ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
           <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-500/10 to-teal-500/10 flex items-center justify-center mb-4">

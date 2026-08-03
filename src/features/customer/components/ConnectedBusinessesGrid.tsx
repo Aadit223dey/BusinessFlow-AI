@@ -13,10 +13,10 @@ export const ConnectedBusinessesGrid = ({ userId }: ConnectedBusinessesGridProps
   const { data: businesses, status } = useCustomerConnectedBusinesses(userId);
 
   useEffect(() => {
-    console.log("🔍 [DIAGNOSTIC] Widget Rendered:", {
+    console.log("🔍 [DIAGNOSTIC 7/7] Widget Mounted:", {
       widgetName: "ConnectedBusinessesGrid",
-      status: `${status} / initialData`,
-      count: businesses?.length || 0,
+      status,
+      dataLength: businesses?.length ?? 0,
     });
   }, [status, businesses]);
 
@@ -30,14 +30,14 @@ export const ConnectedBusinessesGrid = ({ userId }: ConnectedBusinessesGridProps
       <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">
         Connected Businesses
       </h2>
-      
+
       {(!businesses || businesses.length === 0) ? (
         <div className="flex flex-col items-center justify-center text-center py-10 bg-slate-50/50 dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-slate-800/50">
           <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-500/10 to-pink-500/10 flex items-center justify-center mb-4">
             <Store className="w-8 h-8 text-purple-500" />
           </div>
           <h3 className="text-base font-medium text-slate-900 dark:text-white mb-2 max-w-md">
-            You haven't connected with any local businesses yet.
+            You haven&apos;t connected with any local businesses yet.
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Complete a booking or setup to see your connections here.

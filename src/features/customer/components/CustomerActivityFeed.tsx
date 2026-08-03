@@ -13,10 +13,10 @@ export const CustomerActivityFeed = ({ userId }: CustomerActivityFeedProps) => {
   const { data: activities, status } = useCustomerActivities(userId);
 
   useEffect(() => {
-    console.log("🔍 [DIAGNOSTIC] Widget Rendered:", {
+    console.log("🔍 [DIAGNOSTIC 7/7] Widget Mounted:", {
       widgetName: "CustomerActivityFeed",
-      status: `${status} / initialData`,
-      count: activities?.length || 0,
+      status,
+      dataLength: activities?.length ?? 0,
     });
   }, [status, activities]);
 
@@ -30,7 +30,7 @@ export const CustomerActivityFeed = ({ userId }: CustomerActivityFeedProps) => {
       <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">
         Recent Activity
       </h2>
-      
+
       {(!activities || activities.length === 0) ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center py-8 border-l-2 border-dashed border-slate-200 dark:border-slate-700 ml-8 relative">
           <div className="absolute left-[-17px] top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center">

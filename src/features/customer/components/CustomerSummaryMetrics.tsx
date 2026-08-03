@@ -18,28 +18,29 @@ const container = {
   show: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
-    }
-  }
+      staggerChildren: 0.1,
+    },
+  },
 };
 
 const item = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 }
+  show: { opacity: 1, y: 0 },
 };
 
 export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) => {
-  useEffect(() => {
-    console.log("🔍 [DIAGNOSTIC] Widget Rendered:", {
-      widgetName: "CustomerSummaryMetrics",
-      status: "success (defaults 0)",
-    });
-  }, []);
-
   const upcomingBookings = stats?.upcomingBookings ?? 0;
   const completedServices = stats?.completedServices ?? 0;
   const connectedBusinesses = stats?.connectedBusinesses ?? 0;
   const activeInvoices = stats?.activeInvoices ?? 0;
+
+  useEffect(() => {
+    console.log("🔍 [DIAGNOSTIC 7/7] Widget Mounted:", {
+      widgetName: "CustomerSummaryMetrics",
+      status: "success (defaults 0)",
+      dataLength: 4,
+    });
+  }, []);
 
   const cards = [
     {
@@ -48,7 +49,7 @@ export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) =
       icon: CalendarCheck,
       color: "text-emerald-500",
       bgColor: "bg-emerald-500/10",
-      zeroText: "No bookings scheduled"
+      zeroText: "No bookings scheduled",
     },
     {
       title: "Completed Services",
@@ -56,7 +57,7 @@ export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) =
       icon: CheckCircle,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
-      zeroText: "Start exploring services"
+      zeroText: "Start exploring services",
     },
     {
       title: "Connected Businesses",
@@ -64,7 +65,7 @@ export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) =
       icon: Building2,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
-      zeroText: "Connect with providers"
+      zeroText: "Connect with providers",
     },
     {
       title: "Active Invoices",
@@ -72,12 +73,12 @@ export const CustomerSummaryMetrics = ({ stats }: CustomerSummaryMetricsProps) =
       icon: FileText,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      zeroText: "All clear!"
-    }
+      zeroText: "All clear!",
+    },
   ];
 
   return (
-    <motion.div 
+    <motion.div
       variants={container}
       initial="hidden"
       animate="show"
