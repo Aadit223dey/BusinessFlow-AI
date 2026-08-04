@@ -26,16 +26,17 @@ export function CustomerProfileForm() {
   useEffect(() => {
     if (profile) {
       reset({
-        first_name: profile.first_name || '',
-        last_name: profile.last_name || '',
+        first_name: profile.first_name || profile.firstName || '',
+        last_name: profile.last_name || profile.lastName || '',
         phone: profile.phone || '',
         date_of_birth: profile.date_of_birth || '',
         address: profile.address || '',
         emergency_contact_name: profile.emergency_contact_name || '',
         emergency_contact_phone: profile.emergency_contact_phone || '',
       });
-      if (profile.avatar_url) {
-        setAvatarUrl(profile.avatar_url);
+      const currentAvatar = profile.avatar_url || profile.avatarUrl;
+      if (currentAvatar) {
+        setAvatarUrl(currentAvatar);
       }
     }
   }, [profile, reset]);

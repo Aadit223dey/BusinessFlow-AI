@@ -18,6 +18,8 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "@/components/ui/toast";
 import { motion, AnimatePresence } from "framer-motion";
 
+import { useAuth } from "@/providers/auth-provider";
+
 interface CustomerTopNavProps {
   userName?: string;
   userEmail?: string;
@@ -32,10 +34,15 @@ export function CustomerTopNav({
   const pathname = usePathname();
   const router = useRouter();
   const { openMobile, isCollapsed } = useSidebarStore();
+  const { profile } = useAuth();
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const resolvedName = [profile?.firstName || profile?.first_name, profile?.lastName || profile?.last_name]
+    .filter(Boolean)
+    .join(" ") || (userName !== "Customer" ? userName : "Valued Client");
 
   // Generate dynamic breadcrumbs from current pathname, ignoring 'customer' part ideally or keeping it simple
   const pathSegments = pathname.split("/").filter(Boolean);
@@ -45,12 +52,12 @@ export function CustomerTopNav({
     return { href, label };
   });
 
-  const initials = userName
+  const initials = resolvedName
     .split(" ")
     .map((n) => n[0])
     .join("")
     .substring(0, 2)
-    .toUpperCase() || "U";
+    .toUpperCase() || "VC";
 
   const handleSignOut = async () => {
     setIsLoggingOut(true);
@@ -165,13 +172,13 @@ export function CustomerTopNav({
             >
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 font-bold text-xs text-white shadow-sm overflow-hidden">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={userName} className="h-full w-full object-cover" />
+                  <img src={avatarUrl} alt={resolvedName} className="h-full w-full object-cover" />
                 ) : (
                   initials
                 )}
               </div>
               <div className="hidden text-left sm:block pr-1">
-                <p className="text-xs font-bold leading-tight text-foreground">{userName}</p>
+                <p className="text-xs font-bold leading-tight text-foreground">{resolvedName}</p>
                 <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Client Profile
                 </p>
@@ -197,14 +204,14 @@ export function CustomerTopNav({
                     <div className="flex items-center gap-3 border-b border-border/40 pb-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 font-bold text-sm text-white overflow-hidden">
                         {avatarUrl ? (
-                          <img src={avatarUrl} alt={userName} className="h-full w-full object-cover" />
+                          <img src={avatarUrl} alt={resolvedName} className="h-full w-full object-cover" />
                         ) : (
                           initials
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-bold text-foreground">
-                          {userName}
+                          {resolvedName}
                         </p>
                         <p className="truncate text-[11px] text-muted-foreground">
                           {userEmail}

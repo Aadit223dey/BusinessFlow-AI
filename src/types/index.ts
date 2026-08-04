@@ -1,13 +1,14 @@
 export type UserRole = "SUPER_ADMIN" | "BUSINESS_OWNER" | "STAFF" | "CUSTOMER";
 
-export interface UserProfile {
+// Database Row Schema (Matching PostgreSQL public.profiles exactly)
+export interface ProfileRow {
   id: string;
+  tenant_id: string | null;
   role: UserRole | null;
+  first_name: string | null;
+  last_name: string | null;
   has_selected_role: boolean;
   has_completed_onboarding: boolean;
-  first_name?: string | null;
-  last_name?: string | null;
-  tenant_id?: string | null;
   phone?: string | null;
   avatar_url?: string | null;
   address?: string | null;
@@ -16,6 +17,17 @@ export interface UserProfile {
   emergency_contact_phone?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+// Normalized Application Interface used across React Context and UI
+export interface UserProfile extends ProfileRow {
+  // Alias getters / mapped properties to guarantee compatibility with both conventions
+  firstName?: string | null;
+  lastName?: string | null;
+  hasSelectedRole?: boolean;
+  hasCompletedOnboarding?: boolean;
+  tenantId?: string | null;
+  avatarUrl?: string | null;
 }
 
 export type InvitationStatus = "pending" | "accepted" | "expired" | "cancelled";

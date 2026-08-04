@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { env } from '@/config/env';
+import { transformProfile } from '@/lib/transformers/profile-transformer';
 import { CustomerShell } from '@/components/navigation/CustomerShell';
 
 export const dynamic = 'force-dynamic';
@@ -27,32 +28,26 @@ export default async function CustomerLayout({ children }: { children: React.Rea
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  console.log("🔍 [DIAGNOSTIC 2/7] Auth Session Hydrated:", {
-    hasUser: !!user,
-    userId: user?.id,
-    authError: authError?.message ?? null,
-  });
-
-  // Only redirect unauthenticated traffic to /login
   if (authError || !user) { 
     redirect('/login'); 
   }
 
-  const { data: profile } = await supabase
+  const { data: rawProfile } = await supabase
     .from('profiles')
-    .select('first_name, last_name, role, tenant_id, avatar_url, has_selected_role')
+    .select('*')
     .eq('id', user.id)
     .single();
 
-  console.log("🔍 [DIAGNOSTIC 3/7] Profile Loaded:", {
-    role: profile?.role ?? "NULL",
-    hasSelectedRole: profile?.has_selected_role ?? false,
-    tenantId: profile?.tenant_id ?? "NULL (Valid for Customer)",
-    firstName: profile?.first_name,
+  const profile = transformProfile(rawProfile);
+
+  console.log("🔍 [PROFILE TRACE 5/6] Route Guard Validating Profile:", {
+    path: "/customer/*",
+    role: profile?.role,
+    firstName: profile?.firstName,
+    isAllowed: profile?.role === 'CUSTOMER',
   });
 
-  // Handle role routing explicitly - NEVER send authenticated users to /login to avoid 307 loops with middleware
-  if (!profile || !profile.has_selected_role) {
+  if (!profile || !(profile.hasSelectedRole ?? profile.has_selected_role)) {
     redirect('/select-role');
   }
 
@@ -66,15 +61,17 @@ export default async function CustomerLayout({ children }: { children: React.Rea
     redirect('/select-role');
   }
 
-  const userName = profile.first_name || profile.last_name
-    ? `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim()
-    : user.email?.split('@')[0] || 'Customer';
+  console.log("🔍 [PROFILE TRACE 6/6] Customer Layout Mounting with Profile:", profile);
+
+  const displayName = [profile.firstName || profile.first_name, profile.lastName || profile.last_name]
+    .filter(Boolean)
+    .join(" ") || user.email?.split('@')[0] || "Customer";
 
   return (
     <CustomerShell
-      userName={userName}
+      userName={displayName}
       userEmail={user.email || ''}
-      avatarUrl={profile.avatar_url ?? null}
+      avatarUrl={profile.avatarUrl ?? profile.avatar_url ?? null}
     >
       {children}
     </CustomerShell>
