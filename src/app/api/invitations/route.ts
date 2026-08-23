@@ -2,12 +2,69 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { createClient } from "@/lib/supabase/server";
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET() {
   try {
-    const { id } = await params;
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const admin = getSupabaseAdmin() || supabase;
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("id, role, tenant_id")
+      .eq("id", user.id)
+      .single();
+
+    const isSuperAdmin =
+      profile?.role === "SUPER_ADMIN" ||
+      (user.email && user.email.toLowerCase() === "developer223aadit@gmail.com");
+
+    let query = admin
+      .from("invitations")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (!isSuperAdmin) {
+      if (!profile?.tenant_id) {
+        return NextResponse.json({ invitations: [] });
+      }
+      query = query.eq("tenant_id", profile.tenant_id);
+    }
+
+    const { data: invitations, error } = await query;
+
+    if (error) {
+      console.error("Error fetching invitations:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ invitations: invitations || [] });
+  } catch (err: any) {
+    console.error("Unexpected error in GET /api/invitations:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    let id = searchParams.get("id");
+
+    if (!id) {
+      try {
+        const body = await request.json();
+        id = body.id;
+      } catch {
+        // No json body
+      }
+    }
 
     if (!id) {
       return NextResponse.json({ error: "Invitation ID is required." }, { status: 400 });
@@ -24,7 +81,6 @@ export async function DELETE(
 
     const admin = getSupabaseAdmin() || supabase;
 
-    // 1. Verify caller profile
     const { data: profile } = await admin
       .from("profiles")
       .select("id, role, tenant_id")
@@ -44,7 +100,7 @@ export async function DELETE(
       );
     }
 
-    // 2. Fetch target invitation record
+    // Fetch target invitation
     let query = admin.from("invitations").select("id, tenant_id, auth_user_id, status, email").eq("id", id);
     if (!isSuperAdmin && profile?.tenant_id) {
       query = query.eq("tenant_id", profile.tenant_id);
@@ -58,19 +114,19 @@ export async function DELETE(
       );
     }
 
-    // 3. If there was an unconfirmed Auth user created, remove from auth.users
+    // If there was an unconfirmed Auth user created, remove from auth.users
     if (invitation.auth_user_id) {
       const adminClient = getSupabaseAdmin();
       if (adminClient) {
         try {
           await adminClient.auth.admin.deleteUser(invitation.auth_user_id);
         } catch (authDeleteErr) {
-          console.warn("Failed to delete auth user during invitation cancellation:", authDeleteErr);
+          console.warn("Failed to delete auth user during cancellation:", authDeleteErr);
         }
       }
     }
 
-    // 4. Delete row from public.invitations
+    // Delete row from public.invitations
     const { error: deleteError } = await admin
       .from("invitations")
       .delete()
@@ -89,10 +145,7 @@ export async function DELETE(
       message: `Invitation for ${invitation.email} has been cancelled and removed.`,
     });
   } catch (err: any) {
-    console.error("Unexpected error in invitation DELETE:", err);
-    return NextResponse.json(
-      { error: err.message || "Failed to cancel invitation." },
-      { status: 500 }
-    );
+    console.error("Unexpected error in DELETE /api/invitations:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

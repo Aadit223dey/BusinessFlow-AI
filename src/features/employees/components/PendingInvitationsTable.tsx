@@ -11,6 +11,7 @@ interface PendingInvitationsTableProps {
   activeStaff: UserProfile[];
   isLoading: boolean;
   onRefresh: () => void;
+  onDelete?: (id: string) => void;
 }
 
 export function PendingInvitationsTable({
@@ -18,6 +19,7 @@ export function PendingInvitationsTable({
   activeStaff,
   isLoading,
   onRefresh,
+  onDelete,
 }: PendingInvitationsTableProps) {
   const [activeTab, setActiveTab] = useState<"ACTIVE" | "PENDING">("PENDING");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -33,6 +35,10 @@ export function PendingInvitationsTable({
   const handleCancel = async (id: string) => {
     setActionLoadingId(id);
     try {
+      if (onDelete) {
+        onDelete(id);
+      }
+
       const response = await fetch(`/api/invitations/${id}`, {
         method: "DELETE",
       });
@@ -49,6 +55,7 @@ export function PendingInvitationsTable({
       toast.error("Failed to cancel invitation", {
         description: err.message || "Please try again.",
       });
+      onRefresh();
     } finally {
       setActionLoadingId(null);
     }

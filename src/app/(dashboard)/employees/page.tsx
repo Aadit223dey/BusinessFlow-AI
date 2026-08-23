@@ -48,17 +48,29 @@ export default function EmployeesPage() {
   const fetchInvitations = async () => {
     setIsInvitationsLoading(true);
     try {
+      // 1. Try server API route first
+      const res = await fetch("/api/invitations");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.invitations)) {
+          setInvitations(data.invitations);
+          setIsInvitationsLoading(false);
+          return;
+        }
+      }
+
+      // 2. Fallback to direct client query
       const tenantId = profile?.tenant_id || profile?.tenantId;
-      if (!tenantId) return;
+      if (tenantId) {
+        const { data: inviteData } = await supabase
+          .from("invitations")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .order("created_at", { ascending: false });
 
-      const { data: inviteData } = await supabase
-        .from("invitations")
-        .select("*")
-        .eq("tenant_id", tenantId)
-        .order("created_at", { ascending: false });
-
-      if (inviteData) {
-        setInvitations(inviteData as Invitation[]);
+        if (inviteData) {
+          setInvitations(inviteData as Invitation[]);
+        }
       }
     } catch (err) {
       console.error("Error loading invitations:", err);
@@ -67,11 +79,12 @@ export default function EmployeesPage() {
     }
   };
 
+  const handleDeleteInvitation = (id: string) => {
+    setInvitations((prev) => prev.filter((i) => i.id !== id));
+  };
+
   useEffect(() => {
-    const tenantId = profile?.tenant_id || profile?.tenantId;
-    if (tenantId) {
-      fetchInvitations();
-    }
+    fetchInvitations();
   }, [profile?.tenant_id, profile?.tenantId]);
 
   // ── Derived / Filtered Data ─────────────────────────────
@@ -247,6 +260,7 @@ export default function EmployeesPage() {
           activeStaff={[]}
           isLoading={isInvitationsLoading}
           onRefresh={fetchInvitations}
+          onDelete={handleDeleteInvitation}
         />
       )}
 
