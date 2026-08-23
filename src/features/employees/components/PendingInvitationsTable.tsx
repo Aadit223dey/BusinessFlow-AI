@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Clock, CheckCircle2, AlertTriangle, Trash2, Shield, User, XCircle } from "lucide-react";
+import { Mail, Clock, CheckCircle2, AlertTriangle, Trash2, Shield, User, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { type Invitation, type UserProfile } from "@/types";
@@ -33,10 +33,22 @@ export function PendingInvitationsTable({
   const handleCancel = async (id: string) => {
     setActionLoadingId(id);
     try {
-      toast.success("Invitation cancelled successfully");
+      const response = await fetch(`/api/invitations/${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to cancel invitation");
+      }
+
+      toast.success(data.message || "Invitation cancelled successfully");
       onRefresh();
-    } catch {
-      toast.error("Failed to cancel invitation");
+    } catch (err: any) {
+      toast.error("Failed to cancel invitation", {
+        description: err.message || "Please try again.",
+      });
     } finally {
       setActionLoadingId(null);
     }
@@ -169,7 +181,11 @@ export function PendingInvitationsTable({
                               disabled={actionLoadingId === invite.id}
                               className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              {actionLoadingId === invite.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
                             </Button>
                           )}
                         </td>
