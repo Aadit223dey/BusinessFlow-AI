@@ -1,34 +1,29 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Mail, Lock, AlertCircle, ArrowRight, Loader2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
+import { supabase } from "@/lib/supabase";
 import { parseAuthError } from "@/lib/auth-errors";
 
-interface InvitationValidationData {
-  valid: boolean;
-  invitation?: {
-    id: string;
-    email: string;
-    role: string;
-    businessName: string;
-    inviterName: string;
-    expiresAt: string;
-  };
+interface InvitationData {
+  email: string;
+  tenantName: string;
+  invitedRole: string;
+  inviterName?: string;
 }
 
 function AcceptInvitationContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const token = searchParams.get("token");
 
   const [isValidating, setIsValidating] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [inviteData, setInviteData] = useState<InvitationValidationData["invitation"] | null>(null);
+  const [inviteData, setInviteData] = useState<InvitationData | null>(null);
 
   // Form State
   const [firstName, setFirstName] = useState("");
@@ -39,35 +34,112 @@ function AcceptInvitationContent() {
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) {
-      setValidationError("No invitation token provided. Please check your invitation email.");
-      setIsValidating(false);
-      return;
+    let isMounted = true;
+
+    async function checkAuthAndVerify() {
+      try {
+        // ── 1. Check for Direct Token Link (?token=...) ───────────────
+        if (token) {
+          const res = await fetch(`/api/invitations/validate?token=${encodeURIComponent(token)}`);
+          const data = await res.json();
+          if (res.ok && data.valid && isMounted) {
+            setInviteData({
+              email: data.email,
+              tenantName: data.tenantName,
+              invitedRole: data.invitedRole || "STAFF",
+              inviterName: data.inviterName,
+            });
+            setIsValidating(false);
+            return;
+          }
+        }
+
+        // ── 2. Check for Native Supabase Auth Invited Session ─────────
+        // (From email magic link with #access_token=... or session cookies)
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session?.user?.email) {
+          const res = await fetch("/api/invitations/verify-session");
+          const data = await res.json();
+
+          if (res.ok && data.valid && isMounted) {
+            setInviteData({
+              email: data.email,
+              tenantName: data.tenantName,
+              invitedRole: data.invitedRole || "STAFF",
+            });
+            setIsValidating(false);
+            return;
+          } else if (isMounted) {
+            setValidationError(
+              data.error || "No active pending invitation found for your authenticated account."
+            );
+            setIsValidating(false);
+            return;
+          }
+        }
+
+        // ── 3. Listen for async auth state change from URL hash ────────
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+          if (!isMounted) return;
+
+          if (session?.user?.email) {
+            const res = await fetch("/api/invitations/verify-session");
+            const data = await res.json();
+
+            if (res.ok && data.valid && isMounted) {
+              setInviteData({
+                email: data.email,
+                tenantName: data.tenantName,
+                invitedRole: data.invitedRole || "STAFF",
+              });
+              setValidationError(null);
+              setIsValidating(false);
+            } else if (isMounted) {
+              setValidationError(
+                data.error || "No active pending invitation found for your authenticated account."
+              );
+              setIsValidating(false);
+            }
+          }
+        });
+
+        // Set safety timeout if no session and no token arrived
+        setTimeout(() => {
+          if (isMounted && isValidating) {
+            supabase.auth.getSession().then(({ data: { session } }) => {
+              if (!session && !token && isMounted) {
+                setValidationError(
+                  "No invitation token or authenticated session found. Please click the link from your invitation email."
+                );
+                setIsValidating(false);
+              }
+            });
+          }
+        }, 3000);
+
+        return () => {
+          authListener.subscription.unsubscribe();
+        };
+      } catch (err: any) {
+        if (isMounted) {
+          setValidationError(err.message || "Failed to validate invitation.");
+          setIsValidating(false);
+        }
+      }
     }
 
-    const validateToken = async () => {
-      try {
-        const response = await fetch(`/api/invitations/validate?token=${encodeURIComponent(token)}`);
-        const data = await response.json();
+    checkAuthAndVerify();
 
-        if (!response.ok || !data.valid) {
-          setValidationError(data.error || "This invitation link is invalid, expired, or has already been used.");
-        } else {
-          setInviteData(data.invitation);
-        }
-      } catch (err) {
-        setValidationError("Unable to validate invitation. Please check your internet connection.");
-      } finally {
-        setIsValidating(false);
-      }
+    return () => {
+      isMounted = false;
     };
-
-    validateToken();
   }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
 
     if (password !== confirmPassword) {
       setFormError("Passwords do not match.");
@@ -83,14 +155,14 @@ function AcceptInvitationContent() {
     setFormError(null);
 
     try {
-      const response = await fetch("/api/invitations/accept", {
+      const response = await fetch("/api/invitations/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
           password,
           firstName,
           lastName,
+          token: token || undefined,
         }),
       });
 
@@ -103,13 +175,12 @@ function AcceptInvitationContent() {
         return;
       }
 
-      toast.success("Account Created & Linked! 🎉", {
-        description: "Welcome to your staff portal workspace.",
+      toast.success("Account Setup Complete! 🎉", {
+        description: "Welcome to your staff workspace.",
       });
 
-      // Redirect directly to /staff-portal
-      router.replace(data.redirectPath || "/staff-portal");
-      router.refresh();
+      // Hard redirect to staff portal to hydrate fresh profile and cookies
+      window.location.href = data.redirectUrl || "/staff-portal";
     } catch (err) {
       const parsed = parseAuthError(err);
       setFormError(parsed.message);
@@ -125,17 +196,19 @@ function AcceptInvitationContent() {
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="text-center space-y-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
-          <p className="text-sm font-medium text-muted-foreground">Validating your invitation link...</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            Verifying your staff invitation...
+          </p>
         </div>
       </div>
     );
   }
 
-  // Error State: Invalid / Expired Token
+  // Error State: Invalid / Expired
   if (validationError || !inviteData) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
-        <div className="w-full max-w-md border border-border bg-card rounded-2xl shadow-xl p-8 text-center space-y-6 animate-fade-in">
+        <div className="w-full max-w-md border border-border bg-card rounded-3xl shadow-2xl p-8 text-center space-y-6 animate-fade-in">
           <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-2xl bg-destructive/10 text-destructive border border-destructive/20">
             <AlertCircle className="h-8 w-8" />
           </div>
@@ -144,8 +217,9 @@ function AcceptInvitationContent() {
             <h2 className="text-xl font-bold tracking-tight text-foreground">
               Invalid or Expired Invitation
             </h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {validationError || "This invitation link is invalid, expired, or has already been used."}
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              {validationError ||
+                "This invitation link is invalid, expired, or has already been accepted. Please contact your business administrator."}
             </p>
           </div>
 
@@ -159,22 +233,23 @@ function AcceptInvitationContent() {
     );
   }
 
-  // Valid Token State
+  // Valid Invitation Setup Form
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
-      <div className="w-full max-w-md border border-border bg-card rounded-2xl shadow-xl p-8 space-y-6 animate-fade-in">
+      <div className="w-full max-w-md border border-border bg-card rounded-3xl shadow-2xl p-8 space-y-6 animate-fade-in">
         {/* Banner */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1 text-xs font-semibold text-primary">
+          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-3.5 py-1 text-xs font-semibold text-violet-500">
             <Shield className="h-3.5 w-3.5" />
-            <span>Staff Team Invitation</span>
+            <span>Staff Team Workspace</span>
           </div>
 
           <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
-            Join {inviteData.businessName} 🏢
+            Join {inviteData.tenantName} 🏢
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            {inviteData.inviterName} has invited you to join their staff workspace on <strong>BusinessFlow AI</strong>.
+            Set up your credentials to complete onboarding and launch your team workspace on{" "}
+            <strong>BusinessFlow AI</strong>.
           </p>
         </div>
 
@@ -272,7 +347,11 @@ function AcceptInvitationContent() {
           </div>
 
           {/* Action Button */}
-          <Button type="submit" disabled={isSubmitting} className="w-full mt-2 h-11 text-sm font-bold">
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full mt-2 h-11 text-sm font-bold shadow-lg shadow-primary/20"
+          >
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -280,7 +359,7 @@ function AcceptInvitationContent() {
               </>
             ) : (
               <>
-                Accept Invitation & Launch Workspace
+                Complete Setup & Launch Staff Portal
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}
