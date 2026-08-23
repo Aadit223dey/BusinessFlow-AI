@@ -131,6 +131,49 @@ export async function POST(request: Request) {
           error: profileError,
         });
       }
+
+      // 3b. Auto-provision public.staff_members record
+      const { data: staffRecord, error: staffError } = await supabase
+        .from("staff_members")
+        .insert({
+          profile_id: userId,
+          tenant_id: invitation.tenant_id,
+          job_title: "Staff Member",
+          department: "General",
+          status: "ACTIVE",
+        })
+        .select("id")
+        .single();
+
+      if (staffError) {
+        logger.error("Failed to create staff_members record for accepted invitation", {
+          operation: "invitations.accept",
+          userId,
+          error: staffError,
+        });
+      }
+
+      // 3c. Insert default baseline permissions
+      if (staffRecord?.id) {
+        const defaultPermissions = ["SERVICES_VIEW", "APPOINTMENTS_VIEW", "CUSTOMERS_VIEW"];
+        const permRows = defaultPermissions.map((key) => ({
+          staff_id: staffRecord.id,
+          tenant_id: invitation.tenant_id,
+          permission_key: key,
+        }));
+
+        const { error: permError } = await supabase
+          .from("staff_permissions")
+          .insert(permRows);
+
+        if (permError) {
+          logger.error("Failed to insert default staff permissions", {
+            operation: "invitations.accept",
+            staffId: staffRecord.id,
+            error: permError,
+          });
+        }
+      }
     }
 
     // 4. Update public.invitations status to 'accepted' & accepted_at = NOW()

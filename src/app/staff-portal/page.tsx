@@ -1,21 +1,100 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserCheck,
   AlertTriangle,
   LogOut,
   Clock,
+  Shield,
+  Briefcase,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { supabase } from "@/lib/supabase";
 import { toast } from "@/components/ui/toast";
+import { useAuth } from "@/providers/auth-provider";
+import { type StaffPermissionKey, type EmploymentStatus } from "@/types/staff";
+
+interface StaffInfo {
+  id: string;
+  job_title: string;
+  department: string;
+  status: EmploymentStatus;
+  hired_at: string;
+  tenant_name?: string;
+  permissions: StaffPermissionKey[];
+}
 
 export default function StaffPortalPage() {
   const router = useRouter();
+  const { user, profile } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [staffInfo, setStaffInfo] = useState<StaffInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadStaffData() {
+      if (!user) return;
+      setIsLoading(true);
+      try {
+        // 1. Fetch staff member record
+        const { data: staffData, error: staffError } = await supabase
+          .from("staff_members")
+          .select(`
+            id,
+            job_title,
+            department,
+            status,
+            hired_at,
+            tenant_id
+          `)
+          .eq("profile_id", user.id)
+          .maybeSingle();
+
+        if (staffError) {
+          console.error("Error fetching staff member:", staffError);
+        }
+
+        if (staffData) {
+          // 2. Fetch permissions
+          const { data: permData } = await supabase
+            .from("staff_permissions")
+            .select("permission_key")
+            .eq("staff_id", staffData.id);
+
+          // 3. Fetch tenant name
+          const { data: tenantData } = await supabase
+            .from("tenants")
+            .select("name")
+            .eq("id", staffData.tenant_id)
+            .maybeSingle();
+
+          setStaffInfo({
+            id: staffData.id,
+            job_title: staffData.job_title,
+            department: staffData.department,
+            status: staffData.status,
+            hired_at: staffData.hired_at,
+            tenant_name: tenantData?.name || "Business Workspace",
+            permissions: (permData || []).map((p: any) => p.permission_key as StaffPermissionKey),
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load staff portal data:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadStaffData();
+  }, [user]);
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -31,6 +110,8 @@ export default function StaffPortalPage() {
       setIsSigningOut(false);
     }
   };
+
+  const isDeactivated = staffInfo?.status === "INACTIVE" || staffInfo?.status === "SUSPENDED";
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-300">
@@ -67,37 +148,37 @@ export default function StaffPortalPage() {
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-6 sm:p-8">
-        <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-violet-500/20 bg-card/70 p-8 sm:p-10 shadow-premium backdrop-blur-xl text-center space-y-6">
-          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
-
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-4 py-1.5 text-xs font-semibold text-violet-500">
-            <Clock className="h-4 w-4" />
-            <span>Staff Account Portal</span>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center gap-3 p-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading staff workspace...</p>
           </div>
-
-          <div className="space-y-3">
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
-              Staff Workspace Portal 📋
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-              Your daily schedule, assigned appointments, performance metrics, and shift rosters will appear here once linked to your employer's business.
-            </p>
-          </div>
-
-          {/* Notice Block */}
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-left space-y-2 text-xs text-amber-600 dark:text-amber-400">
-            <div className="flex items-center gap-2 font-bold text-amber-700 dark:text-amber-300">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>Invitation Link Required</span>
+        ) : isDeactivated ? (
+          /* Deactivated Notice */
+          <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-destructive/30 bg-card/80 p-8 sm:p-10 shadow-2xl backdrop-blur-xl text-center space-y-6 animate-fade-in">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive border border-destructive/20">
+              <XCircle className="h-7 w-7" />
             </div>
-            <p className="text-amber-700/90 dark:text-amber-400/90 leading-relaxed">
-              Staff accounts require an official invitation link sent by a business administrator. Self-registration is disabled for staff members. Please request an invitation link from your employer.
-            </p>
-          </div>
 
-          {/* Actions */}
-          <div className="pt-2">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
+                Account Deactivated
+              </h1>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                Your staff account status has been marked as <span className="font-semibold text-destructive">{staffInfo?.status}</span> by your employer.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-muted/40 p-4 text-xs text-muted-foreground text-left space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <span>Contact Business Administrator</span>
+              </div>
+              <p>
+                To reactivate your workspace access, please contact your business administrator or employer directly.
+              </p>
+            </div>
+
             <Button
               variant="outline"
               size="default"
@@ -106,10 +187,118 @@ export default function StaffPortalPage() {
               disabled={isSigningOut}
             >
               <LogOut className="h-4 w-4" />
-              <span>{isSigningOut ? "Signing out..." : "Sign Out"}</span>
+              <span>Sign Out</span>
             </Button>
           </div>
-        </div>
+        ) : (
+          /* Active Staff Workspace Card */
+          <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-violet-500/20 bg-card/80 p-8 sm:p-10 shadow-2xl backdrop-blur-xl space-y-8 animate-fade-in">
+            <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
+
+            {/* Header / Identity */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white font-extrabold text-xl shadow-lg shadow-violet-500/20">
+                  {profile?.first_name?.[0] || profile?.firstName?.[0] || "S"}
+                  {profile?.last_name?.[0] || profile?.lastName?.[0] || "M"}
+                </div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">
+                    {profile?.first_name || profile?.firstName || "Staff"}{" "}
+                    {profile?.last_name || profile?.lastName || "Member"}
+                  </h1>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                    <Building2 className="h-3.5 w-3.5" />
+                    <span>{staffInfo?.tenant_name || "Workspace Member"}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 self-start sm:self-center">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Active Staff</span>
+              </div>
+            </div>
+
+            {/* Staff Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Briefcase className="h-3.5 w-3.5 text-primary" />
+                  <span>Job Title</span>
+                </div>
+                <p className="text-sm font-bold text-foreground">
+                  {staffInfo?.job_title || "Staff Member"}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5 text-primary" />
+                  <span>Department</span>
+                </div>
+                <p className="text-sm font-bold text-foreground">
+                  {staffInfo?.department || "General"}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Calendar className="h-3.5 w-3.5 text-primary" />
+                  <span>Member Since</span>
+                </div>
+                <p className="text-sm font-bold text-foreground">
+                  {staffInfo?.hired_at
+                    ? new Date(staffInfo.hired_at).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })
+                    : "Active"}
+                </p>
+              </div>
+            </div>
+
+            {/* Access Permissions Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-violet-500" />
+                <h3 className="text-sm font-bold text-foreground">
+                  Assigned Operational Permissions
+                </h3>
+              </div>
+
+              {staffInfo?.permissions && staffInfo.permissions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {staffInfo.permissions.map((perm) => (
+                    <span
+                      key={perm}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-600 dark:text-violet-400"
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      {perm.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs text-muted-foreground">
+                  No specific operational permissions granted yet. Contact your business administrator to configure permissions.
+                </div>
+              )}
+            </div>
+
+            {/* Operational Modules Notice */}
+            <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 font-bold text-foreground">
+                <Clock className="h-4 w-4 text-violet-500" />
+                <span>Operational Module Delegation</span>
+              </div>
+              <p className="leading-relaxed">
+                As your business owner assigns calendar, customer, and service tasks, your daily shift schedule and operational queues will sync directly into this portal.
+              </p>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

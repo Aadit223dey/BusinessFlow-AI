@@ -55,3 +55,4 @@ export interface CreateInvitationInput {
 
 export * from "./service";
 export * from "./discovery";
+export * from "./staff";
