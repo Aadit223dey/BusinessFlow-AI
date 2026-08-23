@@ -118,7 +118,25 @@ export async function fetchOwnerCategories(): Promise<ServiceCategory[]> {
   }
 }
 
-export async function createService(values: ServiceFormValues, tenantId: string): Promise<void> {
+export async function createService(values: ServiceFormValues, tenantId?: string): Promise<void> {
+  let resolvedTenantId = tenantId;
+
+  if (!resolvedTenantId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", user.id)
+        .single();
+      resolvedTenantId = profile?.tenant_id || undefined;
+    }
+  }
+
+  if (!resolvedTenantId) {
+    throw new Error("Tenant context missing. Unable to create service without an active business tenant.");
+  }
+
   const slug =
     values.name
       .toLowerCase()
@@ -128,7 +146,7 @@ export async function createService(values: ServiceFormValues, tenantId: string)
     Math.random().toString(36).substring(2, 7);
 
   const { error } = await supabase.from("services").insert({
-    tenant_id: tenantId,
+    tenant_id: resolvedTenantId,
     category_id: values.categoryId || null,
     name: values.name,
     slug,
@@ -144,27 +162,15 @@ export async function createService(values: ServiceFormValues, tenantId: string)
 }
 
 export async function updateService(id: string, values: Partial<ServiceFormValues>): Promise<void> {
-  const payload: any = { ...values };
-  if (values.durationMinutes !== undefined) {
-    payload.duration_minutes = values.durationMinutes;
-    delete payload.durationMinutes;
-  }
-  if (values.bufferTimeMinutes !== undefined) {
-    payload.buffer_time_minutes = values.bufferTimeMinutes;
-    delete payload.bufferTimeMinutes;
-  }
-  if (values.categoryId !== undefined) {
-    payload.category_id = values.categoryId;
-    delete payload.categoryId;
-  }
-  if (values.imageUrl !== undefined) {
-    payload.image_url = values.imageUrl || null;
-    delete payload.imageUrl;
-  }
-  if (values.isActive !== undefined) {
-    payload.is_active = values.isActive;
-    delete payload.isActive;
-  }
+  const payload: any = {};
+  if (values.name !== undefined) payload.name = values.name;
+  if (values.description !== undefined) payload.description = values.description || null;
+  if (values.price !== undefined) payload.price = values.price;
+  if (values.durationMinutes !== undefined) payload.duration_minutes = values.durationMinutes;
+  if (values.bufferTimeMinutes !== undefined) payload.buffer_time_minutes = values.bufferTimeMinutes;
+  if (values.categoryId !== undefined) payload.category_id = values.categoryId || null;
+  if (values.imageUrl !== undefined) payload.image_url = values.imageUrl || null;
+  if (values.isActive !== undefined) payload.is_active = values.isActive;
 
   const { error } = await supabase.from("services").update(payload).eq("id", id);
   if (error) throw new Error(error.message);
