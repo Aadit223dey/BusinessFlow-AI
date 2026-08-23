@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // ─── 4. Token & Redirect Generation ───────────────────────────────
+    // ─── 4. Token & Link Generation ───────────────────────────────────
     const invitation_token = crypto.randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -107,94 +107,64 @@ export async function POST(request: Request) {
 
     const inviteLink = `${siteUrl}/invite/accept?token=${invitation_token}`;
 
-    // ─── 5. Privileged Supabase Auth Admin Dispatch ───────────────────
+    // ─── 5. Attempt Supabase Auth Admin Email Dispatch ────────────────
+    let authUserId: string | null = null;
+    let emailSent = false;
+    let emailDispatchNote: string | null = null;
+
     const admin = getSupabaseAdmin();
-    if (!admin) {
-      logger.error("Missing SUPABASE_SERVICE_ROLE_KEY for server invitation dispatch", {
-        operation: "invitations.create",
-      });
-      return NextResponse.json(
-        {
-          error:
-            "Server email dispatch is unavailable: SUPABASE_SERVICE_ROLE_KEY is not configured on the server. Please add your Supabase Service Role Key to .env.local.",
-        },
-        { status: 500 }
+    if (admin) {
+      const { data: authData, error: inviteError } =
+        await admin.auth.admin.inviteUserByEmail(email, {
+          redirectTo: `${siteUrl}/invite/accept`,
+          data: {
+            tenant_id: profile.tenant_id,
+            invited_role: "STAFF",
+            invitation_token,
+          },
+        });
+
+      if (!inviteError && authData?.user?.id) {
+        authUserId = authData.user.id;
+        emailSent = true;
+      } else if (inviteError) {
+        logger.warn("Supabase Auth admin.inviteUserByEmail provider note", {
+          operation: "invitations.create",
+          code: inviteError.code,
+          status: inviteError.status,
+          message: inviteError.message,
+          email,
+        });
+
+        const errMessage = inviteError.message.toLowerCase();
+
+        // If email is already registered in Auth, inform the owner
+        if (
+          errMessage.includes("already registered") ||
+          errMessage.includes("user already exists") ||
+          inviteError.status === 409
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "An account with this email address is already registered in the system. Please use a new email address or assign them directly.",
+            },
+            { status: 409 }
+          );
+        }
+
+        emailDispatchNote = inviteError.message;
+      }
+    } else {
+      logger.info(
+        "SUPABASE_SERVICE_ROLE_KEY not set; generating direct token invitation link for development.",
+        { operation: "invitations.create", email }
       );
+      emailDispatchNote =
+        "Service role key not configured. Direct link generated for instant copying.";
     }
 
-    const { data: authData, error: inviteError } =
-      await admin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${siteUrl}/invite/accept`,
-        data: {
-          tenant_id: profile.tenant_id,
-          invited_role: "STAFF",
-          invitation_token,
-        },
-      });
-
-    // ─── 6. Failure Handling (Atomic: No DB record on failure) ────────
-    if (inviteError) {
-      logger.error("Supabase Auth admin.inviteUserByEmail failed", {
-        operation: "invitations.create",
-        code: inviteError.code,
-        status: inviteError.status,
-        message: inviteError.message,
-        email,
-      });
-
-      const errMessage = inviteError.message.toLowerCase();
-
-      // Rate limit check
-      if (errMessage.includes("rate limit") || inviteError.status === 429) {
-        return NextResponse.json(
-          {
-            error:
-              "Email rate limit reached for the development provider. Please wait a few minutes before inviting another member.",
-          },
-          { status: 429 }
-        );
-      }
-
-      // User already registered check
-      if (
-        errMessage.includes("already registered") ||
-        errMessage.includes("user already exists") ||
-        inviteError.status === 409
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "An account with this email address already exists. The user can be assigned to your workspace directly.",
-          },
-          { status: 409 }
-        );
-      }
-
-      // Email provider rejection / unwhitelisted recipient
-      if (
-        errMessage.includes("not authorized") ||
-        errMessage.includes("rejected") ||
-        errMessage.includes("whitelist") ||
-        inviteError.status === 422
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "The email provider rejected this address. In development, default Supabase mailer only sends to project organization members. Please whitelist this address or configure custom SMTP.",
-          },
-          { status: 422 }
-        );
-      }
-
-      // Generic parsed error
-      const parsed = parseAuthError(inviteError);
-      return NextResponse.json(
-        { error: parsed.message || "Failed to dispatch email invitation." },
-        { status: inviteError.status || 422 }
-      );
-    }
-
-    // ─── 7. Database Synchronization (Transactional upon Auth 200 OK) ─
+    // ─── 6. Database Synchronization (Create Pending Invitation) ─────
     const { data: invitation, error: insertError } = await supabase
       .from("invitations")
       .insert({
@@ -205,7 +175,7 @@ export async function POST(request: Request) {
         invitation_token,
         status: "pending",
         expires_at: expiresAt,
-        auth_user_id: authData?.user?.id || null,
+        auth_user_id: authUserId,
       })
       .select()
       .single();
@@ -219,22 +189,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.message }, { status: 400 });
     }
 
-    logger.info("Staff invitation created and dispatched successfully", {
+    logger.info("Staff invitation created successfully", {
       operation: "invitations.create",
       invitationId: invitation.id,
-      authUserId: authData?.user?.id,
+      authUserId,
       email,
       inviteLink,
+      emailSent,
     });
 
     return NextResponse.json(
       {
-        message: `Invitation email dispatched successfully to ${email}.`,
+        message: emailSent
+          ? `Invitation email dispatched successfully to ${email}.`
+          : `Invitation created for ${email}. Link copied to clipboard for instant onboarding.`,
         invitation: {
           ...invitation,
           inviteLink,
-          auth_user_id: authData?.user?.id,
-          emailSent: true,
+          auth_user_id: authUserId,
+          emailSent,
+          dispatchNote: emailDispatchNote,
         },
       },
       { status: 201 }
