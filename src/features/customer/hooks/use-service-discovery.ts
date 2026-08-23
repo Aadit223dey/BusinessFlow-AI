@@ -3,8 +3,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchActiveServices } from "@/services/discovery-service";
 import { ServiceDiscoveryItem, ServiceFilterState } from "@/types/discovery";
+import { useAuth } from "@/providers/auth-provider";
 
 export function useServiceDiscovery(filters?: Partial<ServiceFilterState>) {
+  const { user } = useAuth();
+
   return useQuery<ServiceDiscoveryItem[]>({
     queryKey: [
       "customer",
@@ -19,8 +22,8 @@ export function useServiceDiscovery(filters?: Partial<ServiceFilterState>) {
     queryFn: async () => {
       return await fetchActiveServices(filters);
     },
-    initialData: [],
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: !!user,
+    staleTime: 1000 * 60 * 3, // 3 minutes
     retry: 1,
     refetchOnWindowFocus: false,
   });

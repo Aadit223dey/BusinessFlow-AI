@@ -55,8 +55,8 @@ export function ServiceGrid({
       <div className="py-8">
         <CustomerEmptyState
           icon={Briefcase}
-          title="Service Catalog Initializing"
-          description="Local service providers and businesses are currently configuring their catalogs. Check back shortly for new service offerings!"
+          title="No Services Currently Available"
+          description="Local verified businesses and service providers will list their offerings here. Check back shortly for new service packages!"
         />
       </div>
     );

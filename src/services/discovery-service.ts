@@ -10,6 +10,38 @@ import {
   transformServiceDiscoveryList,
 } from "@/lib/transformers/discovery-transformer";
 
+export async function fetchAvailableCustomerServices(): Promise<ServiceDiscoveryItem[]> {
+  const { data, error } = await supabase
+    .from("services")
+    .select(`
+      id,
+      tenant_id,
+      category_id,
+      name,
+      slug,
+      description,
+      price,
+      currency,
+      duration_minutes,
+      buffer_time_minutes,
+      image_url,
+      is_active,
+      is_featured,
+      created_at,
+      category:service_categories (id, name, slug),
+      business:tenants (id, name, category, currency, timezone, logo_url, phone, email, city, state)
+    `)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("❌ [Discovery Service Error]:", error.message);
+    throw new Error(error.message);
+  }
+
+  return transformServiceDiscoveryList(data);
+}
+
 export async function fetchActiveServices(
   filters?: Partial<ServiceFilterState>
 ): Promise<ServiceDiscoveryItem[]> {
