@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, UserPlus, X, Loader2, Sparkles } from "lucide-react";
+import { Mail, UserPlus, X, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
@@ -23,7 +23,7 @@ export function InviteStaffModal({ isOpen, onClose, onSuccess }: InviteStaffModa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !email.trim()) {
-      setErrorMsg("Please enter a valid email address");
+      setErrorMsg("Please enter a valid email address.");
       return;
     }
 
@@ -40,9 +40,23 @@ export function InviteStaffModal({ isOpen, onClose, onSuccess }: InviteStaffModa
       const data = await response.json();
 
       if (!response.ok) {
-        const errorText = data.error || "Failed to create staff invitation";
+        let errorText = data.error || "Failed to create staff invitation.";
+
+        // Format user-facing error guidance based on status
+        if (response.status === 429) {
+          errorText =
+            "Email rate limit reached for the development provider. Please wait a few minutes before inviting another member.";
+        } else if (response.status === 422 && errorText.toLowerCase().includes("rejected")) {
+          errorText =
+            "The email provider rejected this address. In development, default Supabase mailer only sends to project organization members. Please whitelist this address or configure custom SMTP.";
+        } else if (response.status === 409) {
+          errorText =
+            data.error ||
+            "An active invitation or staff profile already exists for this email address.";
+        }
+
         setErrorMsg(errorText);
-        toast.error("Invitation Failed", { description: errorText });
+        toast.error("Invitation Dispatch Blocked", { description: errorText });
         return;
       }
 
@@ -54,10 +68,10 @@ export function InviteStaffModal({ isOpen, onClose, onSuccess }: InviteStaffModa
         }
       }
 
-      toast.success("Invitation Created! 🚀", {
+      toast.success("Invitation Sent! 🚀", {
         description: data.invitation?.emailSent
-          ? `Invitation email sent to ${email}. Link copied to clipboard!`
-          : `Invitation created for ${email}. Link copied to clipboard for instant testing!`,
+          ? `Invitation email dispatched to ${email}. Link also copied to clipboard!`
+          : `Invitation created for ${email}. Link copied to clipboard!`,
       });
 
       setEmail("");
@@ -86,7 +100,7 @@ export function InviteStaffModal({ isOpen, onClose, onSuccess }: InviteStaffModa
                 Invite Staff Member
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Send a secure invitation link to join your business workspace.
+                Send an official invitation link to join your business workspace.
               </p>
             </div>
           </div>
@@ -101,8 +115,9 @@ export function InviteStaffModal({ isOpen, onClose, onSuccess }: InviteStaffModa
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           {errorMsg && (
-            <div className="p-3 text-xs rounded-xl bg-destructive/10 border border-destructive/20 text-destructive">
-              {errorMsg}
+            <div className="p-3 text-xs rounded-xl bg-destructive/10 border border-destructive/20 text-destructive flex items-start gap-2 leading-relaxed">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
             </div>
           )}
 
@@ -143,7 +158,7 @@ export function InviteStaffModal({ isOpen, onClose, onSuccess }: InviteStaffModa
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
+                  Dispatching...
                 </>
               ) : (
                 "Send Invitation Email"

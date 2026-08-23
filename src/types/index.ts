@@ -44,6 +44,7 @@ export interface Invitation {
   updated_at: string;
   expires_at: string;
   accepted_at: string | null;
+  auth_user_id?: string | null;
   tenant_name?: string;
   inviter_name?: string;
 }
