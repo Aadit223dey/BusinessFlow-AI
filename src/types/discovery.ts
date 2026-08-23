@@ -1,3 +1,5 @@
+import { ServiceCategory } from "./service";
+
 export interface BusinessPublicProfile {
   id: string;
   name: string;
@@ -13,16 +15,7 @@ export interface BusinessPublicProfile {
   postalCode?: string | null;
 }
 
-export interface ServiceCategory {
-  id: string;
-  tenantId: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  displayOrder: number;
-  isActive: boolean;
-  createdAt?: string;
-}
+export { type ServiceCategory } from "./service";
 
 export interface ServiceDiscoveryItem {
   id: string;

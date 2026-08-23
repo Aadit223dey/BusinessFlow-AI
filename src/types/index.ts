@@ -53,4 +53,5 @@ export interface CreateInvitationInput {
   invited_role?: "STAFF";
 }
 
+export * from "./service";
 export * from "./discovery";
