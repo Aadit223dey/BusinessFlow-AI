@@ -74,10 +74,17 @@ export default async function RootPage() {
     redirect("/admin-portal");
   }
 
+  // STAFF ROUTE ISOLATION
+  if (profile?.role === "STAFF") {
+    redirect("/staff-portal");
+  }
+
+  // UNASSIGNED USER
   if (!profile?.has_selected_role) {
     redirect("/select-role");
   }
 
+  // BUSINESS OWNER
   if (profile.role === "BUSINESS_OWNER") {
     if (profile.has_completed_onboarding) {
       redirect("/dashboard");
@@ -86,12 +93,9 @@ export default async function RootPage() {
     }
   }
 
+  // CUSTOMER
   if (profile.role === "CUSTOMER") {
     redirect("/customer-portal");
-  }
-
-  if (profile.role === "STAFF") {
-    redirect("/staff-portal");
   }
 
   redirect("/select-role");
