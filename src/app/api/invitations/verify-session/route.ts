@@ -2,30 +2,55 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { createClient } from "@/lib/supabase/server";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const { searchParams } = new URL(req.url);
-    const emailParam = searchParams.get("email");
-
-    const emailToVerify = user?.email || emailParam;
-
-    if (!emailToVerify) {
+    if (!user || !user.email) {
       return NextResponse.json(
-        { error: "No authenticated invited session found." },
+        {
+          error: "NO_SESSION",
+          message: "No authenticated invitation session found. Please use the link sent to your email.",
+        },
         { status: 401 }
       );
     }
 
-    const normalizedEmail = emailToVerify.trim().toLowerCase();
-    const admin = getSupabaseAdmin() || supabase;
+    const email = user.email.toLowerCase();
+    const admin = getSupabaseAdmin();
 
-    // Find active pending invitation for this email
-    const { data: invite, error: inviteError } = await admin
+    if (!admin) {
+      // Fallback: try querying with the user's own session (RLS allows reading own email's invitations)
+      const { data: invite } = await supabase
+        .from("invitations")
+        .select("id, tenant_id, email, invited_role, status, expires_at")
+        .eq("email", email)
+        .eq("status", "pending")
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!invite) {
+        return NextResponse.json(
+          { error: "INVITATION_NOT_FOUND", message: "No active staff invitation exists for this account." },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        valid: true,
+        email: invite.email,
+        tenantName: "Your Team Workspace",
+        invitedRole: invite.invited_role,
+      });
+    }
+
+    // Use admin client to bypass RLS and join tenant name
+    const { data: invite, error: dbError } = await admin
       .from("invitations")
       .select(`
         id,
@@ -36,19 +61,16 @@ export async function GET(req: Request) {
         expires_at,
         tenant:tenants (id, name)
       `)
-      .eq("email", normalizedEmail)
+      .eq("email", email)
       .eq("status", "pending")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (inviteError || !invite) {
+    if (dbError || !invite) {
       return NextResponse.json(
-        {
-          error: "No active or valid pending invitation found for this email address.",
-          code: "INVITE_NOT_FOUND",
-        },
+        { error: "INVITATION_NOT_FOUND", message: "No active staff invitation exists for this account." },
         { status: 404 }
       );
     }
@@ -56,13 +78,14 @@ export async function GET(req: Request) {
     return NextResponse.json({
       valid: true,
       email: invite.email,
-      tenantName: (invite.tenant as any)?.name || "Business Workspace",
+      tenantId: invite.tenant_id,
+      tenantName: (invite.tenant as any)?.name || "Your Team Workspace",
       invitedRole: invite.invited_role,
     });
   } catch (err: any) {
-    console.error("❌ [Verify Session Error]:", err);
+    console.error("❌ [VERIFY_SESSION_ERROR]:", err);
     return NextResponse.json(
-      { error: err.message || "Failed to verify invitation session." },
+      { error: "SERVER_ERROR", message: "Verification failed" },
       { status: 500 }
     );
   }

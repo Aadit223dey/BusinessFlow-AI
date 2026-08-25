@@ -116,11 +116,10 @@ export async function POST(request: Request) {
     if (admin) {
       const { data: authData, error: inviteError } =
         await admin.auth.admin.inviteUserByEmail(email, {
-          redirectTo: `${siteUrl}/invite/accept`,
+          redirectTo: `${siteUrl}/auth/callback?next=/invite/accept`,
           data: {
             tenant_id: profile.tenant_id,
             invited_role: "STAFF",
-            invitation_token,
           },
         });
 

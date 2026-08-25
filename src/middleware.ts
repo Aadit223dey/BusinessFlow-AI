@@ -83,8 +83,14 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Explicitly allow candidate invitation acceptance route for all traffic
-  if (pathname.startsWith("/invite/accept")) {
+  // ─── Whitelist: Invitation acceptance & auth callback ────────────────────
+  // These routes MUST bypass all role gates. Invited users arrive here with
+  // has_selected_role=false and role=NULL, so any role check would redirect
+  // them to /select-role or /login, breaking the invitation flow.
+  if (
+    pathname.startsWith("/invite/accept") ||
+    pathname.startsWith("/auth/callback")
+  ) {
     return response;
   }
 

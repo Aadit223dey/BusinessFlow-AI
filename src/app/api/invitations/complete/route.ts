@@ -9,8 +9,11 @@ export async function POST(req: Request) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const body = await req.json();
-    const { password, firstName, lastName, token } = body;
+    if (!user || !user.email) {
+      return NextResponse.json({ error: "Unauthorized: No active session" }, { status: 401 });
+    }
+
+    const { password, firstName, lastName } = await req.json();
 
     if (!password || password.length < 8) {
       return NextResponse.json(
@@ -19,92 +22,37 @@ export async function POST(req: Request) {
       );
     }
 
+    const email = user.email.toLowerCase();
     const admin = getSupabaseAdmin() || supabase;
 
-    // ── 1. Locate Pending Invitation ────────────────────────────────
-    let invite: any = null;
-    let userId: string | null = user?.id || null;
+    // ── 1. Re-validate invitation record atomically ─────────────────
+    const { data: invite, error: inviteErr } = await admin
+      .from("invitations")
+      .select("id, tenant_id")
+      .eq("email", email)
+      .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (user?.email) {
-      const normalizedEmail = user.email.trim().toLowerCase();
-      const { data: invData, error: inviteError } = await admin
-        .from("invitations")
-        .select("*")
-        .eq("email", normalizedEmail)
-        .eq("status", "pending")
-        .gt("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!inviteError && invData) {
-        invite = invData;
-      }
-    }
-
-    // Fallback: If token was passed directly (from URL query string)
-    if (!invite && token) {
-      const { data: invData, error: inviteError } = await admin
-        .from("invitations")
-        .select("*")
-        .eq("invitation_token", token)
-        .eq("status", "pending")
-        .gt("expires_at", new Date().toISOString())
-        .maybeSingle();
-
-      if (!inviteError && invData) {
-        invite = invData;
-      }
-    }
-
-    if (!invite) {
+    if (inviteErr || !invite) {
       return NextResponse.json(
-        { error: "Invitation is invalid, expired, or has already been used." },
+        { error: "Invitation is no longer valid, expired, or has already been used." },
         { status: 400 }
       );
     }
 
-    // ── 2. Update Password or Register User ──────────────────────────
-    if (user) {
-      // User is logged in via Supabase invite email magic link
-      const { error: passwordError } = await supabase.auth.updateUser({ password });
-      if (passwordError) {
-        return NextResponse.json({ error: passwordError.message }, { status: 422 });
-      }
-    } else {
-      // User is signing up using token without prior session
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: invite.email,
-        password,
-        options: {
-          data: {
-            first_name: firstName?.trim() || "",
-            last_name: lastName?.trim() || "",
-            role: "STAFF",
-            tenant_id: invite.tenant_id,
-          },
-        },
-      });
-
-      if (signUpError) {
-        return NextResponse.json({ error: signUpError.message }, { status: 422 });
-      }
-
-      userId = signUpData.user?.id || null;
+    // ── 2. Set permanent password in Supabase Auth ──────────────────
+    const { error: pwdErr } = await supabase.auth.updateUser({ password });
+    if (pwdErr) {
+      return NextResponse.json({ error: pwdErr.message }, { status: 422 });
     }
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Failed to resolve user account for invitation." },
-        { status: 400 }
-      );
-    }
-
-    // ── 3. Update public.profiles ────────────────────────────────────
-    const { error: profileError } = await admin
+    // ── 3. Update public.profiles (STAFF binding) ───────────────────
+    const { error: profileErr } = await admin
       .from("profiles")
-      .upsert({
-        id: userId,
+      .update({
         first_name: firstName?.trim() || null,
         last_name: lastName?.trim() || null,
         role: "STAFF",
@@ -112,19 +60,20 @@ export async function POST(req: Request) {
         has_selected_role: true,
         has_completed_onboarding: true,
         updated_at: new Date().toISOString(),
-      });
+      })
+      .eq("id", user.id);
 
-    if (profileError) {
-      console.error("❌ [Profile Update Failed]:", profileError);
+    if (profileErr) {
+      console.error("❌ [PROFILE_UPDATE_FAILED]:", profileErr);
       return NextResponse.json({ error: "Failed to update user profile" }, { status: 500 });
     }
 
-    // ── 4. Upsert public.staff_members Record ────────────────────────
-    const { data: staffMember, error: staffError } = await admin
+    // ── 4. Provision staff_members record (Idempotent upsert) ───────
+    const { data: staffMember, error: staffErr } = await admin
       .from("staff_members")
       .upsert(
         {
-          profile_id: userId,
+          profile_id: user.id,
           tenant_id: invite.tenant_id,
           job_title: "Staff Member",
           department: "General",
@@ -136,25 +85,25 @@ export async function POST(req: Request) {
       .select("id")
       .single();
 
-    if (staffError) {
-      console.error("❌ [Staff Record Creation Failed]:", staffError);
+    if (staffErr) {
+      console.error("❌ [STAFF_RECORD_FAILED]:", staffErr);
     }
 
-    // ── 5. Grant Baseline Staff Permissions ──────────────────────────
+    // ── 5. Grant baseline permissions ───────────────────────────────
     if (staffMember?.id) {
-      const baselinePermissions = ["SERVICES_VIEW", "APPOINTMENTS_VIEW", "CUSTOMERS_VIEW"];
-      const permissionRows = baselinePermissions.map((key) => ({
+      const defaultPermissions = ["SERVICES_VIEW", "APPOINTMENTS_VIEW", "CUSTOMERS_VIEW"];
+      const rows = defaultPermissions.map((perm) => ({
         staff_id: staffMember.id,
         tenant_id: invite.tenant_id,
-        permission_key: key,
+        permission_key: perm,
       }));
 
       await admin
         .from("staff_permissions")
-        .upsert(permissionRows, { onConflict: "staff_id,permission_key" });
+        .upsert(rows, { onConflict: "staff_id,permission_key" });
     }
 
-    // ── 6. Mark Invitation as Accepted ───────────────────────────────
+    // ── 6. Mark invitation as accepted ──────────────────────────────
     await admin
       .from("invitations")
       .update({
@@ -165,9 +114,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, redirectUrl: "/staff-portal" });
   } catch (err: any) {
-    console.error("❌ [Complete Invitation Error]:", err);
+    console.error("❌ [COMPLETE_INVITATION_EXCEPTION]:", err);
     return NextResponse.json(
-      { error: err.message || "An unexpected error occurred while completing invitation." },
+      { error: err.message || "Failed to complete registration" },
       { status: 500 }
     );
   }
