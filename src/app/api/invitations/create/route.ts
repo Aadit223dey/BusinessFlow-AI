@@ -79,8 +79,10 @@ export async function POST(request: Request) {
     const { email, invited_role } = validation.data;
 
     // ─── 3. Duplicate Checks ──────────────────────────────────────────
-    // Check if active (pending) invitation already exists for this tenant
-    const { data: existingInvite } = await supabase
+    const admin = getSupabaseAdmin();
+    const dbClient = admin || supabase;
+
+    const { data: existingInvite } = await dbClient
       .from("invitations")
       .select("id")
       .eq("tenant_id", profile.tenant_id)
@@ -107,12 +109,40 @@ export async function POST(request: Request) {
 
     const inviteLink = `${siteUrl}/accept-invitation?token=${invitation_token}`;
 
-    // ─── 5. Attempt Supabase Auth Admin Email Dispatch ────────────────
+    // ─── 5. INSERT INVITATION RECORD FIRST ────────────────────────────
+    // CRITICAL: The invitation MUST exist in public.invitations BEFORE
+    // inviteUserByEmail() is called, because inviteUserByEmail() creates
+    // the auth.users row which fires handle_new_user() trigger.
+    // If the invitation isn't in the DB yet, the trigger can't find it
+    // and creates an unassigned profile (role=NULL) instead of STAFF.
+    const { data: invitation, error: insertError } = await dbClient
+      .from("invitations")
+      .insert({
+        tenant_id: profile.tenant_id,
+        invited_by: profile.id,
+        email,
+        invited_role,
+        invitation_token,
+        status: "pending",
+        expires_at: expiresAt,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      logger.error("Failed to insert invitation tracking record", {
+        operation: "invitations.create",
+        error: insertError,
+      });
+      const parsed = parseAuthError(insertError);
+      return NextResponse.json({ error: parsed.message }, { status: 400 });
+    }
+
+    // ─── 6. THEN Dispatch Supabase Auth Admin Invitation Email ────────
     let authUserId: string | null = null;
     let emailSent = false;
     let emailDispatchNote: string | null = null;
 
-    const admin = getSupabaseAdmin();
     if (admin) {
       const { data: authData, error: inviteError } =
         await admin.auth.admin.inviteUserByEmail(email, {
@@ -126,6 +156,12 @@ export async function POST(request: Request) {
       if (!inviteError && authData?.user?.id) {
         authUserId = authData.user.id;
         emailSent = true;
+
+        // Update invitation with the auth_user_id
+        await dbClient
+          .from("invitations")
+          .update({ auth_user_id: authUserId })
+          .eq("id", invitation.id);
       } else if (inviteError) {
         logger.warn("Supabase Auth admin.inviteUserByEmail provider note", {
           operation: "invitations.create",
@@ -143,16 +179,20 @@ export async function POST(request: Request) {
           errMessage.includes("user already exists") ||
           inviteError.status === 409
         ) {
-          return NextResponse.json(
-            {
-              error:
-                "An account with this email address is already registered in the system. Please use a new email address or assign them directly.",
-            },
-            { status: 409 }
-          );
+          // Don't delete the invitation — the existing user can still be
+          // auto-linked via /select-role server guard when they log in.
+          emailDispatchNote =
+            "This user already has an account. They will be auto-linked as STAFF when they next log in.";
+        } else if (
+          inviteError.status === 429 ||
+          errMessage.includes("rate") ||
+          errMessage.includes("limit")
+        ) {
+          emailDispatchNote =
+            "Email rate limit reached. The invitation was created. Share the link manually or try resending later.";
+        } else {
+          emailDispatchNote = inviteError.message;
         }
-
-        emailDispatchNote = inviteError.message;
       }
     } else {
       logger.info(
@@ -161,31 +201,6 @@ export async function POST(request: Request) {
       );
       emailDispatchNote =
         "Service role key not configured. Direct link generated for instant copying.";
-    }
-
-    // ─── 6. Database Synchronization (Create Pending Invitation) ─────
-    const { data: invitation, error: insertError } = await supabase
-      .from("invitations")
-      .insert({
-        tenant_id: profile.tenant_id,
-        invited_by: profile.id,
-        email,
-        invited_role,
-        invitation_token,
-        status: "pending",
-        expires_at: expiresAt,
-        auth_user_id: authUserId,
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      logger.error("Failed to insert invitation tracking record", {
-        operation: "invitations.create",
-        error: insertError,
-      });
-      const parsed = parseAuthError(insertError);
-      return NextResponse.json({ error: parsed.message }, { status: 400 });
     }
 
     logger.info("Staff invitation created successfully", {
