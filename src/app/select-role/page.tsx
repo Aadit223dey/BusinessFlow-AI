@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { RoleSelectionCards } from "@/features/auth/components/RoleSelectionCards";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -21,19 +21,17 @@ export default async function SelectRolePage() {
   const userEmail = user.email.toLowerCase().trim();
   console.log("🔍 [DIAGNOSTIC] AUTH_USER_DETECTED: True", { userId: user.id, email: userEmail });
 
-  const admin = getSupabaseAdmin();
-  const dbClient = admin || supabase;
-
-  // 1. Fetch current profile state
-  const { data: profile } = await dbClient
+  // 1. Check existing profile state
+  const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("role, has_selected_role, has_completed_onboarding, tenant_id")
     .eq("id", user.id)
     .single();
 
-  // If already STAFF, redirect to staff portal
   if (profile?.role === "STAFF") {
-    console.log("🔍 [DIAGNOSTIC] PUBLIC_ROLE_SELECTION_BYPASSED: User already has STAFF role");
+    console.log(
+      "🔍 [DIAGNOSTIC] STAFF_FLOW_TRIGGERED: User already has STAFF role -> Redirecting to /staff-portal"
+    );
     redirect("/staff-portal");
   } else if (profile?.role === "BUSINESS_OWNER") {
     redirect(profile.has_completed_onboarding ? "/dashboard" : "/onboarding");
@@ -43,10 +41,10 @@ export default async function SelectRolePage() {
     redirect("/admin-portal");
   }
 
-  // 2. Lookup Pending Staff Invitation for this verified email
-  console.log("🔍 [DIAGNOSTIC] INVITATION_LOOKUP_STARTED", { email: userEmail });
+  // 2. Pending Staff Invitation Check (Guarantees reconciliation if trigger did not execute)
+  console.log("🔍 [DIAGNOSTIC] PENDING_INVITATION_LOOKUP", { email: userEmail });
 
-  const { data: invite } = await dbClient
+  const { data: invite } = await supabaseAdmin
     .from("invitations")
     .select("id, tenant_id, invited_role, status, expires_at")
     .eq("email", userEmail)
@@ -57,16 +55,13 @@ export default async function SelectRolePage() {
     .maybeSingle();
 
   if (invite) {
-    console.log("🔍 [DIAGNOSTIC] INVITATION_FOUND & INVITATION_VALID", {
+    console.log("🔍 [DIAGNOSTIC] INVITATION_FOUND & VALIDATED", {
       inviteId: invite.id,
       tenantId: invite.tenant_id,
-      role: invite.invited_role,
     });
 
-    console.log("🔍 [DIAGNOSTIC] STAFF_ROLE_ASSIGNMENT_STARTED");
-
-    // A. Update Profile to STAFF
-    const { error: profileUpdateError } = await dbClient
+    // A. Update Profile
+    await supabaseAdmin
       .from("profiles")
       .update({
         role: "STAFF",
@@ -77,13 +72,8 @@ export default async function SelectRolePage() {
       })
       .eq("id", user.id);
 
-    if (profileUpdateError) {
-      console.error("❌ [DIAGNOSTIC] Failed to update profile to STAFF:", profileUpdateError);
-      redirect("/login?error=ProfileBindingFailed");
-    }
-
-    // B. Upsert Staff Member Record
-    const { data: staffMember } = await dbClient
+    // B. Upsert Staff Member
+    const { data: staffMember } = await supabaseAdmin
       .from("staff_members")
       .upsert(
         {
@@ -99,10 +89,10 @@ export default async function SelectRolePage() {
       .select("id")
       .single();
 
+    // C. Assign Default Permissions
     if (staffMember) {
-      // C. Assign Baseline Permissions
       const defaultPerms = ["SERVICES_VIEW", "APPOINTMENTS_VIEW", "CUSTOMERS_VIEW"];
-      await dbClient.from("staff_permissions").upsert(
+      await supabaseAdmin.from("staff_permissions").upsert(
         defaultPerms.map((p) => ({
           staff_id: staffMember.id,
           tenant_id: invite.tenant_id,
@@ -113,7 +103,7 @@ export default async function SelectRolePage() {
     }
 
     // D. Mark Invitation Accepted
-    await dbClient
+    await supabaseAdmin
       .from("invitations")
       .update({
         status: "accepted",
@@ -123,12 +113,14 @@ export default async function SelectRolePage() {
       })
       .eq("id", invite.id);
 
-    console.log("🔍 [DIAGNOSTIC] INVITATION_ACCEPTED & STAFF_REDIRECT_STARTED");
+    console.log(
+      "🔍 [DIAGNOSTIC] STAFF_ROLE_ASSIGNED & INVITATION_ACCEPTED -> Redirecting to /staff-portal"
+    );
     redirect("/staff-portal");
   }
 
-  // 3. No Invitation -> Fallback to Public Registration Selection
-  console.log("🔍 [DIAGNOSTIC] INVITATION_NOT_FOUND -> PUBLIC_ROLE_SELECTION_TRIGGERED");
+  // 3. Fallback to Public Role Selection ONLY if no invitation exists
+  console.log("🔍 [DIAGNOSTIC] PUBLIC_ROLE_SELECTION_TRIGGERED");
   return (
     <div className="min-h-screen flex flex-col justify-between bg-background text-foreground transition-colors duration-300">
       {/* Top Header */}
