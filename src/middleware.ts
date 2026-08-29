@@ -88,6 +88,7 @@ export async function middleware(request: NextRequest) {
   // has_selected_role=false and role=NULL, so any role check would redirect
   // them to /select-role or /login, breaking the invitation flow.
   if (
+    pathname.startsWith("/accept-invitation") ||
     pathname.startsWith("/invite/accept") ||
     pathname.startsWith("/auth/callback")
   ) {

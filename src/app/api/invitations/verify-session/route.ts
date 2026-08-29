@@ -7,49 +7,24 @@ export async function GET() {
     const supabase = await createClient();
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (!user || !user.email) {
+    if (authError || !user || !user.email) {
       return NextResponse.json(
         {
           error: "NO_SESSION",
-          message: "No authenticated invitation session found. Please use the link sent to your email.",
+          message:
+            "No authenticated session detected. Please open the link directly from your invitation email.",
         },
         { status: 401 }
       );
     }
 
-    const email = user.email.toLowerCase();
-    const admin = getSupabaseAdmin();
+    const email = user.email.toLowerCase().trim();
+    const admin = getSupabaseAdmin() || supabase;
 
-    if (!admin) {
-      // Fallback: try querying with the user's own session (RLS allows reading own email's invitations)
-      const { data: invite } = await supabase
-        .from("invitations")
-        .select("id, tenant_id, email, invited_role, status, expires_at")
-        .eq("email", email)
-        .eq("status", "pending")
-        .gt("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!invite) {
-        return NextResponse.json(
-          { error: "INVITATION_NOT_FOUND", message: "No active staff invitation exists for this account." },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({
-        valid: true,
-        email: invite.email,
-        tenantName: "Your Team Workspace",
-        invitedRole: invite.invited_role,
-      });
-    }
-
-    // Use admin client to bypass RLS and join tenant name
+    // Query pending invitation
     const { data: invite, error: dbError } = await admin
       .from("invitations")
       .select(`
@@ -69,8 +44,22 @@ export async function GET() {
       .maybeSingle();
 
     if (dbError || !invite) {
+      // Check if user is already an accepted staff member
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.role === "STAFF") {
+        return NextResponse.json({ alreadyAccepted: true, redirectUrl: "/staff-portal" });
+      }
+
       return NextResponse.json(
-        { error: "INVITATION_NOT_FOUND", message: "No active staff invitation exists for this account." },
+        {
+          error: "INVITATION_NOT_FOUND",
+          message: "No active staff invitation found for this email address.",
+        },
         { status: 404 }
       );
     }
@@ -79,7 +68,7 @@ export async function GET() {
       valid: true,
       email: invite.email,
       tenantId: invite.tenant_id,
-      tenantName: (invite.tenant as any)?.name || "Your Team Workspace",
+      tenantName: (invite.tenant as any)?.name || "Team Workspace",
       invitedRole: invite.invited_role,
     });
   } catch (err: any) {

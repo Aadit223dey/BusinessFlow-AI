@@ -105,7 +105,7 @@ export async function POST(request: Request) {
       request.headers.get("referer")?.replace(/\/$/, "") ||
       "http://localhost:3000";
 
-    const inviteLink = `${siteUrl}/invite/accept?token=${invitation_token}`;
+    const inviteLink = `${siteUrl}/accept-invitation?token=${invitation_token}`;
 
     // ─── 5. Attempt Supabase Auth Admin Email Dispatch ────────────────
     let authUserId: string | null = null;
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     if (admin) {
       const { data: authData, error: inviteError } =
         await admin.auth.admin.inviteUserByEmail(email, {
-          redirectTo: `${siteUrl}/auth/callback?next=/invite/accept`,
+          redirectTo: `${siteUrl}/accept-invitation`,
           data: {
             tenant_id: profile.tenant_id,
             invited_role: "STAFF",
