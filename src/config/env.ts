@@ -23,6 +23,11 @@ const envSchema = z.object({
 
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   SUPER_ADMIN_EMAIL: z.string().email().optional().default("developer223aadit@gmail.com"),
+
+  // AI Assistant Configuration (Server-Only)
+  AI_PROVIDER: z.enum(["gemini", "openai"]).optional().default("gemini"),
+  AI_MODEL: z.string().optional().default("gemini-3.5-flash-lite"),
+  AI_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -33,6 +38,9 @@ function validateEnv(): Env {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NODE_ENV: process.env.NODE_ENV,
     SUPER_ADMIN_EMAIL: process.env.SUPER_ADMIN_EMAIL,
+    AI_PROVIDER: process.env.AI_PROVIDER,
+    AI_MODEL: process.env.AI_MODEL,
+    AI_API_KEY: process.env.AI_API_KEY,
   });
 
   if (!result.success) {

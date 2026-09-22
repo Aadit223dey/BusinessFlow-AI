@@ -1,12 +1,5 @@
-import { ComingSoon } from "@/components/shared/coming-soon";
+import { ChatContainer } from "@/features/ai-assistant/components/ChatContainer";
 
 export default function AiInsightsPage() {
-  return (
-    <ComingSoon
-      moduleName="AI Business Assistant & Insights"
-      description="Automated business intelligence, schedule optimization, and predictive growth recommendations."
-      iconName="ai-insights"
-      sprintBadge="Sprint 8 Release"
-    />
-  );
+  return <ChatContainer portalRole="BUSINESS_OWNER" />;
 }

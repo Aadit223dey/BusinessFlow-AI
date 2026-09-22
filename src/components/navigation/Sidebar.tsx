@@ -36,7 +36,7 @@ const navItems = [
   { name: "Invoices", href: "/invoices", icon: FileText },
   { name: "Inventory", href: "/inventory", icon: Package },
   { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "AI Insights", href: "/ai-insights", icon: Sparkles, badge: "AI" },
+  { name: "AI Assistant", href: "/ai-insights", icon: Sparkles, badge: "Live AI" },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 

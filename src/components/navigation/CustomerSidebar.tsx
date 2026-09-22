@@ -13,6 +13,7 @@ import {
   Headset,
   UserCircle,
   Settings,
+  Sparkles,
   ChevronLeft,
   ChevronRight,
   X
@@ -23,6 +24,7 @@ import { motion, AnimatePresence } from "framer-motion";
 const navItems = [
   { name: "Dashboard", href: "/customer/dashboard", icon: LayoutDashboard },
   { name: "Customer Desk", href: "/customer/desk", icon: Headset, badge: "Desk" },
+  { name: "AI Assistant", href: "/customer/ai-assistant", icon: Sparkles, badge: "Live AI" },
   { name: "Appointments", href: "/customer/appointments", icon: CalendarCheck },
   { name: "Services", href: "/customer/services", icon: Briefcase },
   { name: "Orders", href: "/customer/orders", icon: ShoppingBag },
